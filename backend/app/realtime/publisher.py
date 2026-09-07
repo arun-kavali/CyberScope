@@ -69,3 +69,39 @@ def publish_alert_created(alert: Alert) -> None:
             asyncio.run(publish_alert_created_async(alert))
         except Exception as e:
             logger.error(f"Error publishing alert event outside loop: {e}")
+
+def format_analysis_completed_payload(analysis: Any, alert: Alert) -> Dict[str, Any]:
+    findings = analysis.findings or {}
+    return {
+        "type": "ANALYSIS_COMPLETED",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "data": {
+            "analysis_id": str(analysis.id),
+            "alert_id": str(alert.id),
+            "alert_code": alert.alert_code,
+            "status": findings.get("triage_status", "COMPLETED"),
+            "summary": analysis.summary,
+            "triggered_rules_count": findings.get("triggered_rules_count", 0),
+            "created_at": analysis.created_at.isoformat() if isinstance(analysis.created_at, datetime) else str(analysis.created_at)
+        }
+    }
+
+async def publish_analysis_completed_async(analysis: Any, alert: Alert) -> None:
+    try:
+        payload = format_analysis_completed_payload(analysis, alert)
+        await manager.broadcast_to_role(payload, "SOC_ANALYST")
+    except Exception as e:
+        logger.error(f"Failed to publish ANALYSIS_COMPLETED event: {e}")
+
+def publish_analysis_completed(analysis: Any, alert: Alert) -> None:
+    try:
+        loop = asyncio.get_running_loop()
+        if loop.is_running():
+            loop.create_task(publish_analysis_completed_async(analysis, alert))
+        else:
+            asyncio.run(publish_analysis_completed_async(analysis, alert))
+    except RuntimeError:
+        try:
+            asyncio.run(publish_analysis_completed_async(analysis, alert))
+        except Exception as e:
+            logger.error(f"Error publishing analysis event outside loop: {e}")

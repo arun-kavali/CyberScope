@@ -9,8 +9,9 @@ from sqlalchemy import select, func, desc
 from app.db.session import get_db
 from app.models.identity import Profile
 from app.models.evidence import Alert
+from app.models.intelligence import AlertAnalysis
 from app.models.sources import AlertSource
-from app.auth.dependencies import get_current_user, require_alert_source
+from app.auth.dependencies import get_current_user, require_alert_source, require_soc_analyst
 from app.schemas.alerts import (
     AlertCreateSchema,
     BatchAlertCreateSchema,
@@ -18,10 +19,12 @@ from app.schemas.alerts import (
     AlertBatchResponseSchema,
     ScenarioGenerateRequestSchema,
     ScenarioPreviewResponseSchema,
-    IngestionResultSchema
+    IngestionResultSchema,
+    AlertAnalysisResponseSchema
 )
 from app.services.generator import generate_synthetic_alerts_data, EXACT_SCENARIO_CATEGORIES
 from app.services.ingestion import process_alert_ingestion
+from app.services.triage import execute_alert_triage
 
 router = APIRouter(prefix="/alerts", tags=["Alerts"])
 
@@ -176,3 +179,47 @@ async def get_alert_by_id(
             detail=f"Alert with ID '{alert_id}' not found."
         )
     return alert
+
+@router.get("/{alert_id}/analysis", response_model=AlertAnalysisResponseSchema, status_code=status.HTTP_200_OK)
+async def get_alert_analysis(
+    alert_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: Profile = Depends(require_soc_analyst)
+):
+    """
+    Retrieves the Phase 9 automatic triage analysis record for a given alert UUID.
+    Restricted to SOC_ANALYST role.
+    """
+    alert = db.scalar(select(Alert).where(Alert.id == alert_id))
+    if not alert:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Alert with ID '{alert_id}' not found."
+        )
+
+    analysis = db.scalar(select(AlertAnalysis).where(AlertAnalysis.alert_id == alert_id))
+    if not analysis:
+        # Automatically run triage if analysis record doesn't exist yet
+        analysis = execute_alert_triage(db, alert)
+
+    return analysis
+
+@router.post("/{alert_id}/reanalyze", response_model=AlertAnalysisResponseSchema, status_code=status.HTTP_200_OK)
+async def reanalyze_alert(
+    alert_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: Profile = Depends(require_soc_analyst)
+):
+    """
+    Triggers re-evaluation of Phase 9 context enrichment and detection rules for an existing alert.
+    Restricted to SOC_ANALYST role.
+    """
+    alert = db.scalar(select(Alert).where(Alert.id == alert_id))
+    if not alert:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Alert with ID '{alert_id}' not found."
+        )
+
+    analysis = execute_alert_triage(db, alert)
+    return analysis

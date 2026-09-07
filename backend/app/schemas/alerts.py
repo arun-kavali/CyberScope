@@ -69,6 +69,16 @@ class AlertBatchResponseSchema(BaseModel):
     alerts: List[AlertResponseSchema]
     message: str = "Batch ingestion processed"
 
+class AlertAnalysisResponseSchema(BaseModel):
+    id: UUID
+    alert_id: UUID
+    summary: str
+    findings: Optional[Dict[str, Any]] = None
+    analysis_metadata: Optional[Dict[str, Any]] = None
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
 class ScenarioGenerateRequestSchema(BaseModel):
     category: str = Field(..., description="AUTHENTICATION, ENDPOINT, NETWORK, DATABASE, EMAIL")
     scenario_name: str = Field(..., description="Predefined scenario name")

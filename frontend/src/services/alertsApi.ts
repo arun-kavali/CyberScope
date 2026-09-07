@@ -175,3 +175,64 @@ export async function getAlertByIdApi(token: string, alertId: string): Promise<A
 
   return res.json();
 }
+
+export interface TriggeredRule {
+  rule_id: string;
+  rule_name: string;
+  rule_version: string;
+  matched: boolean;
+  severity: string;
+  reason: string;
+  evidence: Record<string, any>;
+}
+
+export interface AlertAnalysisRecord {
+  id: string;
+  alert_id: string;
+  summary: string;
+  findings?: {
+    triage_status?: string;
+    triggered_rules_count?: number;
+    triggered_rules?: TriggeredRule[];
+    threat_indicator_match?: Record<string, any>;
+    triage_priority_input?: string;
+  };
+  analysis_metadata?: {
+    triage_version?: string;
+    context_enrichment?: Record<string, any>;
+    processed_at?: string;
+  };
+  created_at: string;
+}
+
+export async function getAlertAnalysisApi(token: string, alertId: string): Promise<AlertAnalysisRecord> {
+  const res = await fetch(`${API_BASE_URL}/alerts/${alertId}/analysis`, {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({ detail: 'Failed to fetch alert analysis' }));
+    throw new Error(errorData.detail || `Server returned status ${res.status}`);
+  }
+
+  return res.json();
+}
+
+export async function reanalyzeAlertApi(token: string, alertId: string): Promise<AlertAnalysisRecord> {
+  const res = await fetch(`${API_BASE_URL}/alerts/${alertId}/reanalyze`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({ detail: 'Failed to reanalyze alert' }));
+    throw new Error(errorData.detail || `Server returned status ${res.status}`);
+  }
+
+  return res.json();
+}

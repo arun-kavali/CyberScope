@@ -184,6 +184,14 @@ def process_alert_ingestion(
         import logging
         logging.getLogger("cyberscope.ingestion").error(f"Error publishing realtime alert event: {e}")
 
+    # Execute Phase 9 Automatic Triage & Context Enrichment Pipeline
+    try:
+        from app.services.triage import execute_alert_triage
+        execute_alert_triage(db, db_alert)
+    except Exception as e:
+        import logging
+        logging.getLogger("cyberscope.ingestion").error(f"Error executing automatic alert triage: {e}")
+
     return IngestionResult(
         status="SUCCESS",
         alert_id=db_alert.id,
