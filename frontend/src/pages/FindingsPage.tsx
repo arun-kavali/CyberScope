@@ -11,10 +11,12 @@ import {
   getNegativeSpaceApi,
   getOperationalAnomaliesApi,
   getOperationalFindingsApi,
+  getPeerBenchmarksApi,
   ExecutionGapRecord,
   NegativeSpaceRecord,
   OperationalAnomalyRecord,
-  OperationalFinding
+  OperationalFinding,
+  PeerBenchmarkRecord
 } from '../services/analyticsApi';
 import { CheckCircle2 } from 'lucide-react';
 
@@ -42,7 +44,14 @@ export const FindingsPage: React.FC = () => {
     enabled: !!token,
   });
 
-  // 4. Fetch General Operational Findings
+  // 4. Fetch Peer Benchmarks
+  const { data: peerBenchmarks, isLoading: isLoadingPeer } = useQuery<PeerBenchmarkRecord[]>({
+    queryKey: ['peer-benchmarks-page'],
+    queryFn: () => getPeerBenchmarksApi(token || ''),
+    enabled: !!token,
+  });
+
+  // 5. Fetch General Operational Findings
   const { data: findings } = useQuery<OperationalFinding[]>({
     queryKey: ['operational-findings-page'],
     queryFn: () => getOperationalFindingsApi(token || ''),
@@ -214,7 +223,62 @@ export const FindingsPage: React.FC = () => {
         )}
       </Card>
 
-      {/* 4. GENERAL OPERATIONAL FINDINGS CARD */}
+      {/* 4. PEER BENCHMARKING CARD */}
+      <Card
+        title="Peer Operational Benchmarking"
+        subtitle="Normalized operational performance comparisons against Enterprise SOC Peer Group baselines"
+        headerStyle="green"
+      >
+        {isLoadingPeer ? (
+          <LoadingState message="Calculating peer operational benchmarks..." />
+        ) : !peerBenchmarks || peerBenchmarks.length === 0 ? (
+          <EmptyState
+            title="No Peer Benchmark Data"
+            description="Insufficient telemetry data to calculate normalized peer benchmarks."
+            icon={CheckCircle2}
+          />
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr className="border-b border-slate-200 bg-slate-50 text-slate-700 font-bold uppercase tracking-wider text-[11px]">
+                  <th className="py-2.5 px-3">Metric Name</th>
+                  <th className="py-2.5 px-3">Subject Value</th>
+                  <th className="py-2.5 px-3">Peer Baseline</th>
+                  <th className="py-2.5 px-3">Deviation</th>
+                  <th className="py-2.5 px-3">Status / Direction</th>
+                  <th className="py-2.5 px-3">Sample Size</th>
+                  <th className="py-2.5 px-3">Peer Group</th>
+                  <th className="py-2.5 px-3">Methodology</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 font-sans text-slate-800">
+                {peerBenchmarks.map((pb) => (
+                  <tr key={pb.id} className="hover:bg-slate-50/80 transition-colors">
+                    <td className="py-2.5 px-3 font-mono font-bold text-brand-900">{pb.metric_name}</td>
+                    <td className="py-2.5 px-3 font-mono font-bold text-slate-900">{pb.subject_value ?? pb.normalized_metric}</td>
+                    <td className="py-2.5 px-3 font-mono text-slate-600">{pb.peer_baseline ?? '-'}</td>
+                    <td className="py-2.5 px-3 font-mono font-semibold text-slate-700">
+                      {pb.deviation !== undefined ? (pb.deviation > 0 ? `+${pb.deviation}` : pb.deviation) : '-'}
+                    </td>
+                    <td className="py-2.5 px-3">
+                      <StatusBadge
+                        status={pb.direction === 'INSUFFICIENT_DATA' ? 'neutral' : pb.direction === 'NORMAL' ? 'healthy' : 'warning'}
+                        label={pb.direction || 'NORMAL'}
+                      />
+                    </td>
+                    <td className="py-2.5 px-3 font-mono text-slate-600">{pb.sample_size ?? '-'}</td>
+                    <td className="py-2.5 px-3 text-slate-700 font-semibold">{pb.peer_group}</td>
+                    <td className="py-2.5 px-3 text-[11px] text-slate-500 leading-tight">{pb.methodology || 'Normalized comparison against peer group.'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
+
+      {/* 5. GENERAL OPERATIONAL FINDINGS CARD */}
       {findings && findings.length > 0 && (
         <Card title="General Operational Security Findings" subtitle="Rule trigger evidence and correlated findings" headerStyle="green">
           <div className="overflow-x-auto">

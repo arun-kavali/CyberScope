@@ -101,6 +101,14 @@ export interface PeerBenchmarkRecord {
   metric_name: string;
   normalized_metric: number;
   peer_group: string;
+  subject_entity?: string;
+  subject_value?: number;
+  peer_baseline?: number;
+  deviation?: number;
+  direction?: string;
+  sample_size?: number;
+  time_range?: string;
+  methodology?: string;
   comparison_context?: Record<string, any>;
   created_at: string;
 }
@@ -115,6 +123,38 @@ export interface OperationalAnomalyRecord {
   threshold_method: string;
   supporting_records?: Record<string, any>;
   timestamp: string;
+}
+
+export interface RiskContributor {
+  contributor_type: string;
+  contribution: number;
+  supporting_evidence?: Record<string, any>;
+  source_record?: Record<string, any>;
+  calculation_method: string;
+  timestamp: string;
+}
+
+export interface SupervisoryRiskRecord {
+  overall_score: number;
+  status: string;
+  contributors: RiskContributor[];
+  calculation_methodology: string;
+  data_quality_status: string;
+  timestamp: string;
+}
+
+export interface ReviewPriorityRecord {
+  id: string;
+  target_type: string;
+  target_id: string;
+  rank: number;
+  priority_score: number;
+  severity: string;
+  reason: string;
+  risk_indicator: number;
+  evidence_references?: Record<string, any>;
+  supporting_findings?: Array<Record<string, any>>;
+  created_at: string;
 }
 
 export async function runOperationalAnalyticsApi(token: string, days = 30): Promise<OperationalAnalyticsSummary> {
@@ -173,6 +213,24 @@ export async function getPeerBenchmarksApi(token: string): Promise<PeerBenchmark
 
 export async function getOperationalAnomaliesApi(token: string): Promise<OperationalAnomalyRecord[]> {
   const res = await fetch(`${API_BASE_URL}/analytics/anomalies`, {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) return [];
+  return res.json();
+}
+
+export async function getSupervisoryRiskApi(token: string): Promise<SupervisoryRiskRecord | null> {
+  const res = await fetch(`${API_BASE_URL}/analytics/supervisory-risk`, {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) return null;
+  return res.json();
+}
+
+export async function getReviewPrioritiesApi(token: string): Promise<ReviewPriorityRecord[]> {
+  const res = await fetch(`${API_BASE_URL}/analytics/review-priorities`, {
     method: 'GET',
     headers: { Authorization: `Bearer ${token}` },
   });

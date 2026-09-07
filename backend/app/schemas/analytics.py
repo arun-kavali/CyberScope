@@ -99,6 +99,14 @@ class PeerBenchmarkResponseSchema(BaseModel):
     metric_name: str
     normalized_metric: float
     peer_group: str
+    subject_entity: str = "SOC_ORGANIZATION"
+    subject_value: float = 0.0
+    peer_baseline: float = 0.0
+    deviation: float = 0.0
+    direction: str = "NORMAL"  # "ABOVE", "BELOW", "NORMAL", "INSUFFICIENT_DATA"
+    sample_size: int = 0
+    time_range: str = "Last 30 Days"
+    methodology: str = "Normalized median baseline comparison against enterprise peer group."
     comparison_context: Optional[Dict[str, Any]] = None
     created_at: datetime
 
@@ -114,3 +122,34 @@ class OperationalAnomalySchema(BaseModel):
     threshold_method: str
     supporting_records: Optional[Dict[str, Any]] = None
     timestamp: datetime
+
+class RiskContributorSchema(BaseModel):
+    contributor_type: str
+    contribution: float
+    supporting_evidence: Optional[Dict[str, Any]] = None
+    source_record: Optional[Dict[str, Any]] = None
+    calculation_method: str
+    timestamp: datetime
+
+class SupervisoryRiskResponseSchema(BaseModel):
+    overall_score: float
+    status: str
+    contributors: List[RiskContributorSchema]
+    calculation_methodology: str
+    data_quality_status: str
+    timestamp: datetime
+
+class ReviewPriorityResponseSchema(BaseModel):
+    id: UUID
+    target_type: str
+    target_id: UUID
+    rank: int
+    priority_score: float
+    severity: str
+    reason: str
+    risk_indicator: float
+    evidence_references: Optional[Dict[str, Any]] = None
+    supporting_findings: List[Dict[str, Any]] = Field(default_factory=list)
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
