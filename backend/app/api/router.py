@@ -1,10 +1,11 @@
 from fastapi import APIRouter
-from app.api import health, auth, alerts, analysis, incidents, sources, analytics, response, reports, audit
+from app.api import health, test, auth, alerts, analysis, incidents, sources, analytics, response, reports, audit
 
 api_router = APIRouter()
 
-# Register health check
+# Register health check and database test diagnostics
 api_router.include_router(health.router)
+api_router.include_router(test.router)
 
 # Register modular feature routers (empty shells ready for future phases)
 api_router.include_router(auth.router)
