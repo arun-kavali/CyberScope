@@ -22,30 +22,44 @@ CyberScope is designed with a clean, decoupled, local-first architecture ensurin
 ### Backend
 - **Framework:** Python + FastAPI
 - **Server:** Uvicorn
+- **ORM & Migrations:** SQLAlchemy 2.0 + Alembic
 - **Validation & Settings:** Pydantic v2 + Pydantic Settings
 - **API Protocol:** RESTful API with CORS configuration for local frontend development
 
-### Storage & AI Architecture (Planned for Future Phases)
-- **Primary Database:** Native Local PostgreSQL (Phase 2)
+### Storage & AI Architecture
+- **Primary Database:** Native Local PostgreSQL 17.11 (Host: `localhost:5432`, Database: `cyberscope`)
 - **Local AI Engine:** Ollama with Llama3 local model (Phase 16)
 
 ---
 
-## Current Status — Phase 1: Project Foundation
+## Current Status — Phase 3: Database Schema & Migrations Established
 
-We are currently at **Phase 1 (Project Foundation)**.
+We are currently at **Phase 3 (Database Schema and Migrations)**.
 
-### What is established in Phase 1:
-- [x] Complete repository directory structure
-- [x] React + TypeScript + Vite frontend application shell
-- [x] FastAPI backend application with modular API router structure
-- [x] Light green + white enterprise visual design foundation
-- [x] Backend health endpoint `GET /health` returning `{"status": "healthy", "service": "cyberscope-api"}`
-- [x] TanStack Query frontend integration with real-time health status indicator
-- [x] Environment configuration template (`.env.example`) and Git ignore rules (`.gitignore`)
-- [x] Backend test suite verifying health endpoint
+### What is established:
+- [x] **Phase 1 Foundation:** React + Vite frontend, FastAPI backend, CORS, health endpoint.
+- [x] **Phase 2 Database Foundation:** Native local PostgreSQL 17.11 connection pool, `app.db` SQLAlchemy session management, diagnostic endpoint `GET /api/v1/test/database`.
+- [x] **Phase 3 Relational Schema:** Complete 38-table relational schema implemented across 7 logical domains (Identity, Sources, Evidence, Intelligence, Analytics, Response, Audit/Reports) with Alembic migration `08d35b688e91`.
 
-*Note: Database schemas, migrations, authentication, alert ingestion, analytics, AI integration, and response actions are scheduled for implementation in Phases 2–24.*
+*Note: Authentication, alert ingestion pipelines, analytics engines, AI integration, and response orchestration are scheduled for sequential implementation in Phases 4–24.*
+
+---
+
+## Database Migrations (Alembic)
+
+Database schema management is handled via Alembic.
+
+### Checking Migration Status
+```bash
+cd backend
+alembic current
+```
+
+### Applying Migrations
+```bash
+cd backend
+alembic upgrade head
+```
 
 ---
 
@@ -55,28 +69,24 @@ We are currently at **Phase 1 (Project Foundation)**.
 cyberscope/
 ├── frontend/             # React + TypeScript + Vite application
 │   ├── src/
-│   │   ├── components/   # UI components (Header, Sidebar, Badges, MetricCards)
-│   │   ├── pages font/    # Router page views (HomePage, NotFoundPage)
-│   │   ├── layouts/     # Application shell layout
-│   │   ├── hooks font/    # Custom React / TanStack Query hooks (useHealth)
-│   │   ├── services/    # API HTTP client services
-│   │   ├── types/       # TypeScript type definitions
-│   │   └── utils/       # Utility functions
+│   │   ├── components/   # Header, Sidebar, StatusBadge, MetricCard
+│   │   ├── pages/        # HomePage, NotFoundPage
+│   │   ├── layouts/      # AppLayout
+│   │   ├── hooks/        # useHealth
+│   │   ├── services/     # API HTTP client
+│   │   ├── types/        # TypeScript type definitions
+│   │   └── utils/
 │   └── package.json
 ├── backend/              # FastAPI application
+│   ├── alembic/          # Alembic migration scripts and env.py
+│   │   └── versions/     # Migration revision scripts (08d35b688e91)
 │   ├── app/
-│   │   ├── api/          # Modular API routers (/health, /auth, /alerts, etc.)
-│   │   ├── auth/         # Auth module shell
-│   │   ├── models/       # Database models (Phase 2)
+│   │   ├── api/          # Modular API routers (/health, /test/database, etc.)
+│   │   ├── db/           # SQLAlchemy engine, session maker, DeclarativeBase
+│   │   ├── models/       # ORM Models (identity, sources, evidence, intelligence, analytics, response, audit)
+│   │   ├── auth/         # Auth module shell (Phase 4)
 │   │   ├── schemas/      # Pydantic data schemas
 │   │   ├── services/     # Business logic services
-│   │   ├── ingestion/    # Data ingestion engine
-│   │   ├── analytics font/# Detection & analytics engines
-│   │   ├── correlation/  # Incident correlation engine
-│   │   ├── risk/         # Risk & confidence scoring
-│   │   ├── ai/           # Ollama AI intelligence integration
-│   │   ├── response/     # Orchestration & response actions
-│   │   ├── audit/        # Immutable audit logging
 │   │   └── main.py       # FastAPI application entry point
 │   ├── requirements.txt
 │   └── alembic.ini
@@ -85,7 +95,7 @@ cyberscope/
 ├── data/                 # Sample alerts, cases, assets, and entities
 ├── ollama/               # Ollama model configuration scripts
 ├── docker/               # Container scripts (optional)
-├── tests/                # Test suites (backend, frontend, integration, e2e)
+├── tests/                # Test suites (test_health.py, test_database.py, test_schema.py)
 ├── docs/                 # Documentation
 ├── scripts/              # Helper & utility scripts
 ├── .env.example          # Development environment template
@@ -122,28 +132,29 @@ source .venv/bin/activate
 pip install -r backend/requirements.txt
 ```
 
-4. Start the FastAPI development server:
+4. Configure local `.env`:
+
+```env
+DATABASE_URL=postgresql://postgres:YOUR_LOCAL_PASSWORD@localhost:5432/cyberscope
+```
+
+5. Run Alembic migrations:
 
 ```bash
-# From project root
+cd backend
+alembic upgrade head
+cd ..
+```
+
+6. Start the FastAPI development server:
+
+```bash
 uvicorn backend.app.main:app --reload --port 8000
 ```
 
-5. Verify the backend health endpoint:
-
-Open http://localhost:8000/health in your browser or run:
-
-```bash
-curl http://localhost:8000/health
-```
-
-Expected response:
-```json
-{
-  "status": "healthy",
-  "service": "cyberscope-api"
-}
-```
+7. Verify endpoints:
+- `http://localhost:8000/health` -> `{"status": "healthy", "service": "cyberscope-api"}`
+- `http://localhost:8000/api/v1/test/database` -> `{"database": "connected", "status": "healthy"}`
 
 ### 2. Frontend Setup
 
@@ -152,27 +163,15 @@ Expected response:
 
 ```bash
 cd frontend
-```
-
-3. Install frontend dependencies:
-
-```bash
 npm install
-```
-
-4. Start the Vite development server:
-
-```bash
 npm run dev
 ```
 
-5. Open http://localhost:5173 in your browser to view the CyberScope dashboard shell.
+3. Open http://localhost:5173 in your browser to view the CyberScope dashboard shell.
 
 ---
 
 ## Running Tests
-
-### Backend Health Check Test
 
 ```bash
 # From project root with virtual environment activated
