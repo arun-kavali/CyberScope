@@ -6,22 +6,26 @@ import { StatusBadge } from '../components/StatusBadge';
 import { LoadingState } from '../components/LoadingState';
 import { EmptyState } from '../components/EmptyState';
 import { useAuth } from '../context/AuthContext';
+import { useState } from 'react';
 import {
   getExecutionGapsApi,
   getNegativeSpaceApi,
   getOperationalAnomaliesApi,
   getOperationalFindingsApi,
   getPeerBenchmarksApi,
+  getFindingDetailApi,
   ExecutionGapRecord,
   NegativeSpaceRecord,
   OperationalAnomalyRecord,
   OperationalFinding,
-  PeerBenchmarkRecord
+  PeerBenchmarkRecord,
+  FindingDetailRecord
 } from '../services/analyticsApi';
-import { CheckCircle2 } from 'lucide-react';
+import { CheckCircle2, GitCommit, X } from 'lucide-react';
 
 export const FindingsPage: React.FC = () => {
   const { token } = useAuth();
+  const [selectedFindingId, setSelectedFindingId] = useState<string | null>(null);
 
   // 1. Fetch Execution Gaps
   const { data: executionGaps, isLoading: isLoadingGaps } = useQuery<ExecutionGapRecord[]>({
@@ -58,6 +62,13 @@ export const FindingsPage: React.FC = () => {
     enabled: !!token,
   });
 
+  // 6. Fetch Traceability Detail for Selected Finding
+  const { data: findingDetail, isLoading: isLoadingDetail } = useQuery<FindingDetailRecord | null>({
+    queryKey: ['finding-detail', selectedFindingId],
+    queryFn: () => getFindingDetailApi(token || '', selectedFindingId || ''),
+    enabled: !!token && !!selectedFindingId,
+  });
+
   const getSeverityBadgeType = (sev?: string): 'critical' | 'warning' | 'info' | 'neutral' => {
     switch (sev?.toUpperCase()) {
       case 'CRITICAL':
@@ -80,6 +91,63 @@ export const FindingsPage: React.FC = () => {
         phaseBadge="Phase 18 Operational Intelligence"
         breadcrumbs={[{ label: 'CyberScope' }, { label: 'Findings' }]}
       />
+
+      {/* TRACEABILITY MODAL / DRAWER CARD */}
+      {selectedFindingId && (
+        <Card
+          title="Evidence Traceability Chain"
+          subtitle="5-Node evidence chain mapping Finding → Incident/Case → Investigation → Alert/Event → Normalized Evidence"
+          headerStyle="green"
+        >
+          <div className="flex justify-between items-start mb-4">
+            <div>
+              <span className="text-xs font-mono text-slate-500 uppercase tracking-wider block">Finding ID: {selectedFindingId}</span>
+              {findingDetail && (
+                <h3 className="text-sm font-bold text-slate-900 mt-1">{findingDetail.title}</h3>
+              )}
+            </div>
+            <button
+              onClick={() => setSelectedFindingId(null)}
+              className="p-1 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+
+          {isLoadingDetail ? (
+            <LoadingState message="Resolving 5-node evidence traceability chain..." />
+          ) : !findingDetail ? (
+            <EmptyState title="Finding Detail Unavailable" description="Could not resolve finding details or evidence links." icon={CheckCircle2} />
+          ) : (
+            <div className="space-y-4">
+              <div className="flex items-center space-x-3 overflow-x-auto pb-2">
+                {findingDetail.evidence_chain.map((node, i) => (
+                  <React.Fragment key={i}>
+                    <div className={`p-3 rounded-lg border min-w-[180px] max-w-[220px] shadow-xs ${node.status === 'RESOLVED' ? 'bg-emerald-50/60 border-emerald-200' : 'bg-slate-50 border-slate-200'}`}>
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-600">{node.node_type}</span>
+                        <StatusBadge status={node.status === 'RESOLVED' ? 'healthy' : 'neutral'} label={node.status} />
+                      </div>
+                      <span className="text-xs font-bold text-slate-900 block truncate">{node.title || node.node_type}</span>
+                      {node.record_id && (
+                        <span className="text-[10px] font-mono text-slate-500 block truncate mt-0.5" title={node.record_id}>{node.record_id}</span>
+                      )}
+                    </div>
+                    {i < findingDetail.evidence_chain.length - 1 && (
+                      <span className="text-slate-400 font-bold text-base">&rarr;</span>
+                    )}
+                  </React.Fragment>
+                ))}
+              </div>
+
+              <div className="p-3 bg-slate-900 text-slate-100 font-mono text-[11px] rounded-md overflow-x-auto">
+                <span className="text-emerald-400 font-bold block mb-1">Traceability Metadata & Payload Context</span>
+                <pre>{JSON.stringify(findingDetail, null, 2)}</pre>
+              </div>
+            </div>
+          )}
+        </Card>
+      )}
 
       {/* 1. EXECUTION GAPS CARD */}
       <Card
@@ -105,7 +173,7 @@ export const FindingsPage: React.FC = () => {
                   <th className="py-2.5 px-3">Evidence Reason</th>
                   <th className="py-2.5 px-3">Threshold</th>
                   <th className="py-2.5 px-3">Supporting Records</th>
-                  <th className="py-2.5 px-3">Logged Timestamp</th>
+                  <th className="py-2.5 px-3">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 font-sans text-slate-800">
@@ -120,8 +188,14 @@ export const FindingsPage: React.FC = () => {
                     <td className="py-2.5 px-3 font-mono text-[11px] text-slate-600">
                       {JSON.stringify(gap.supporting_records || {})}
                     </td>
-                    <td className="py-2.5 px-3 font-mono text-[11px] text-slate-500">
-                      {new Date(gap.created_at).toUTCString()}
+                    <td className="py-2.5 px-3">
+                      <button
+                        onClick={() => setSelectedFindingId(gap.id)}
+                        className="inline-flex items-center space-x-1 font-bold text-brand-700 hover:text-brand-900 text-[11px] bg-brand-50 hover:bg-brand-100 px-2 py-1 rounded border border-brand-200 transition-colors"
+                      >
+                        <GitCommit className="h-3 w-3" />
+                        <span>Trace Evidence</span>
+                      </button>
                     </td>
                   </tr>
                 ))}

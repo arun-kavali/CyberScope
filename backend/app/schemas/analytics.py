@@ -153,3 +153,35 @@ class ReviewPriorityResponseSchema(BaseModel):
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+class TraceabilityNodeSchema(BaseModel):
+    node_type: str  # "FINDING", "CASE_INCIDENT", "INVESTIGATION", "ALERT_EVENT", "NORMALIZED_EVIDENCE"
+    status: str     # "RESOLVED", "NOT_OBSERVED", "ORPHAN"
+    record_id: Optional[str] = None
+    title: Optional[str] = None
+    details: Optional[Dict[str, Any]] = None
+
+class FindingDetailResponseSchema(BaseModel):
+    finding_id: UUID
+    finding_type: str
+    category: Optional[str] = "OPERATIONAL"
+    severity: str
+    risk_score: Optional[float] = 0.0
+    title: str
+    summary: str
+    reason: str
+    evidence_references: Optional[Dict[str, Any]] = None
+    analytical_signals: Optional[Dict[str, Any]] = None
+    peer_context: Optional[Dict[str, Any]] = None
+    created_at: datetime
+    evidence_chain: List[TraceabilityNodeSchema] = Field(default_factory=list)
+
+class EvidenceDetailResponseSchema(BaseModel):
+    id: UUID
+    entity_type: str
+    entity_id: UUID
+    evidence_payload: Optional[Dict[str, Any]] = None
+    sanitized: bool = True
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)

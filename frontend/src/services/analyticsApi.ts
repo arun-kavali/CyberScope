@@ -157,6 +157,39 @@ export interface ReviewPriorityRecord {
   created_at: string;
 }
 
+export interface TraceabilityNode {
+  node_type: string;
+  status: string;
+  record_id?: string;
+  title?: string;
+  details?: Record<string, any>;
+}
+
+export interface FindingDetailRecord {
+  finding_id: string;
+  finding_type: string;
+  category?: string;
+  severity: string;
+  risk_score?: number;
+  title: string;
+  summary: string;
+  reason: string;
+  evidence_references?: Record<string, any>;
+  analytical_signals?: Record<string, any>;
+  peer_context?: Record<string, any>;
+  created_at: string;
+  evidence_chain: TraceabilityNode[];
+}
+
+export interface EvidenceDetailRecord {
+  id: string;
+  entity_type: string;
+  entity_id: string;
+  evidence_payload?: Record<string, any>;
+  sanitized: boolean;
+  created_at: string;
+}
+
 export async function runOperationalAnalyticsApi(token: string, days = 30): Promise<OperationalAnalyticsSummary> {
   const res = await fetch(`${API_BASE_URL}/analytics/run?days=${days}`, {
     method: 'POST',
@@ -235,5 +268,32 @@ export async function getReviewPrioritiesApi(token: string): Promise<ReviewPrior
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!res.ok) return [];
+  return res.json();
+}
+
+export async function getFindingDetailApi(token: string, findingId: string): Promise<FindingDetailRecord | null> {
+  const res = await fetch(`${API_BASE_URL}/analytics/findings/${findingId}`, {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) return null;
+  return res.json();
+}
+
+export async function getFindingTraceabilityApi(token: string, findingId: string): Promise<FindingDetailRecord | null> {
+  const res = await fetch(`${API_BASE_URL}/analytics/findings/${findingId}/traceability`, {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) return null;
+  return res.json();
+}
+
+export async function getEvidenceDetailApi(token: string, evidenceId: string): Promise<EvidenceDetailRecord | null> {
+  const res = await fetch(`${API_BASE_URL}/analytics/evidence/${evidenceId}`, {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) return null;
   return res.json();
 }

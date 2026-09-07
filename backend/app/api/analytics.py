@@ -16,7 +16,8 @@ from app.models.analytics import (
     ExecutionGapFinding,
     NegativeSpaceFinding,
     PeerBenchmark,
-    ReviewPriority
+    ReviewPriority,
+    Evidence
 )
 from app.models.sources import AlertSource
 from app.schemas.analytics import (
@@ -35,7 +36,10 @@ from app.schemas.analytics import (
     OperationalAnomalySchema,
     RiskContributorSchema,
     SupervisoryRiskResponseSchema,
-    ReviewPriorityResponseSchema
+    ReviewPriorityResponseSchema,
+    TraceabilityNodeSchema,
+    FindingDetailResponseSchema,
+    EvidenceDetailResponseSchema
 )
 
 router = APIRouter(prefix="/analytics", tags=["Operational Analytics"])
@@ -1018,3 +1022,335 @@ async def get_operational_anomalies(
             ))
 
     return anomalies
+
+SENSITIVE_KEYS = {"password", "secret", "token", "api_key", "credentials", "auth", "private_key", "authorization"}
+
+def sanitize_evidence_payload(data: Any) -> Any:
+    if isinstance(data, dict):
+        sanitized = {}
+        for k, v in data.items():
+            if any(s in k.lower() for s in SENSITIVE_KEYS):
+                sanitized[k] = "[REDACTED]"
+            else:
+                sanitized[k] = sanitize_evidence_payload(v)
+        return sanitized
+    elif isinstance(data, list):
+        return [sanitize_evidence_payload(item) for item in data]
+    return data
+
+def resolve_finding_detail(db: Session, finding_id: uuid.UUID) -> FindingDetailResponseSchema:
+    # 1. Search ExecutionGapFinding
+    gap = db.scalar(select(ExecutionGapFinding).where(ExecutionGapFinding.id == finding_id))
+    if gap:
+        chain: List[TraceabilityNodeSchema] = []
+
+        # Node 1: FINDING
+        chain.append(TraceabilityNodeSchema(
+            node_type="FINDING",
+            status="RESOLVED",
+            record_id=str(gap.id),
+            title=f"Execution Gap ({gap.finding_type})",
+            details={"type": gap.finding_type, "severity": gap.severity, "reason": gap.reason, "threshold": gap.threshold}
+        ))
+
+        # Node 2: CASE_INCIDENT
+        supp = gap.supporting_records or {}
+        inc_id_str = supp.get("incident_id")
+        case_id_str = supp.get("case_id")
+        inc_node = None
+        if inc_id_str:
+            try:
+                inc = db.scalar(select(Incident).where(Incident.id == uuid.UUID(inc_id_str)))
+                if inc:
+                    inc_node = TraceabilityNodeSchema(
+                        node_type="CASE_INCIDENT",
+                        status="RESOLVED",
+                        record_id=str(inc.id),
+                        title=f"Incident {inc.incident_number}",
+                        details={"incident_number": inc.incident_number, "severity": inc.severity, "status": inc.status}
+                    )
+            except ValueError:
+                pass
+        if not inc_node and case_id_str:
+            try:
+                case_obj = db.scalar(select(Case).where(Case.id == uuid.UUID(case_id_str)))
+                if case_obj:
+                    inc_node = TraceabilityNodeSchema(
+                        node_type="CASE_INCIDENT",
+                        status="RESOLVED",
+                        record_id=str(case_obj.id),
+                        title=f"Case {case_obj.case_number}",
+                        details={"case_number": case_obj.case_number, "status": case_obj.status}
+                    )
+            except ValueError:
+                pass
+        if not inc_node:
+            inc_node = TraceabilityNodeSchema(
+                node_type="CASE_INCIDENT",
+                status="NOT_OBSERVED",
+                details={"reason": "No linked Incident or Case record observed for this execution gap finding."}
+            )
+        chain.append(inc_node)
+
+        # Node 3: INVESTIGATION
+        inv_id_str = supp.get("investigation_id")
+        inv_node = None
+        if inv_id_str:
+            try:
+                inv = db.scalar(select(Investigation).where(Investigation.id == uuid.UUID(inv_id_str)))
+                if inv:
+                    inv_node = TraceabilityNodeSchema(
+                        node_type="INVESTIGATION",
+                        status="RESOLVED",
+                        record_id=str(inv.id),
+                        title=f"Investigation ({inv.status})",
+                        details={"status": inv.status, "summary": inv.summary, "notes": inv.notes}
+                    )
+            except ValueError:
+                pass
+        if not inv_node:
+            inv_node = TraceabilityNodeSchema(
+                node_type="INVESTIGATION",
+                status="NOT_OBSERVED",
+                details={"reason": "No linked Investigation record observed for this execution gap finding."}
+            )
+        chain.append(inv_node)
+
+        # Node 4: ALERT_EVENT
+        alert_id_str = (gap.evidence or {}).get("alert_id") or supp.get("alert_id")
+        alert_code = supp.get("alert_code")
+        alert_node = None
+        if alert_id_str:
+            try:
+                alert = db.scalar(select(Alert).where(Alert.id == uuid.UUID(alert_id_str)))
+                if alert:
+                    alert_node = TraceabilityNodeSchema(
+                        node_type="ALERT_EVENT",
+                        status="RESOLVED",
+                        record_id=str(alert.id),
+                        title=f"Alert {alert.alert_code}",
+                        details={"alert_code": alert.alert_code, "severity": alert.severity, "event_type": alert.event_type}
+                    )
+            except ValueError:
+                pass
+        if not alert_node and alert_code:
+            alert = db.scalar(select(Alert).where(Alert.alert_code == alert_code))
+            if alert:
+                alert_node = TraceabilityNodeSchema(
+                    node_type="ALERT_EVENT",
+                    status="RESOLVED",
+                    record_id=str(alert.id),
+                    title=f"Alert {alert.alert_code}",
+                    details={"alert_code": alert.alert_code, "severity": alert.severity, "event_type": alert.event_type}
+                )
+        if not alert_node:
+            alert_node = TraceabilityNodeSchema(
+                node_type="ALERT_EVENT",
+                status="NOT_OBSERVED",
+                details={"reason": "No linked Alert or Event record observed for this execution gap finding."}
+            )
+        chain.append(alert_node)
+
+        # Node 5: NORMALIZED_EVIDENCE
+        ev = db.scalar(select(Evidence).where(Evidence.entity_id == gap.id))
+        if ev and ev.evidence_payload:
+            sanitized_payload = sanitize_evidence_payload(ev.evidence_payload)
+            chain.append(TraceabilityNodeSchema(
+                node_type="NORMALIZED_EVIDENCE",
+                status="RESOLVED",
+                record_id=str(ev.id),
+                title="Persisted Evidence Record",
+                details=sanitized_payload
+            ))
+        elif gap.evidence:
+            sanitized_payload = sanitize_evidence_payload(gap.evidence)
+            chain.append(TraceabilityNodeSchema(
+                node_type="NORMALIZED_EVIDENCE",
+                status="RESOLVED",
+                record_id=str(gap.id),
+                title="Analytical Finding Evidence Payload",
+                details=sanitized_payload
+            ))
+        else:
+            chain.append(TraceabilityNodeSchema(
+                node_type="NORMALIZED_EVIDENCE",
+                status="NOT_OBSERVED",
+                details={"reason": "No normalized evidence payload stored."}
+            ))
+
+        return FindingDetailResponseSchema(
+            finding_id=gap.id,
+            finding_type=gap.finding_type,
+            category="EXECUTION_GAP",
+            severity=gap.severity,
+            risk_score=80.0 if gap.severity == "HIGH" else 60.0,
+            title=f"Execution Gap: {gap.finding_type}",
+            summary=gap.reason,
+            reason=gap.reason,
+            evidence_references=gap.supporting_records,
+            analytical_signals=gap.evidence,
+            peer_context=gap.peer_context,
+            created_at=gap.created_at,
+            evidence_chain=chain
+        )
+
+    # 2. Search NegativeSpaceFinding
+    ns = db.scalar(select(NegativeSpaceFinding).where(NegativeSpaceFinding.id == finding_id))
+    if ns:
+        evidence = ns.supporting_evidence or {}
+        f_type = evidence.get("finding_type", "NEGATIVE_SPACE")
+        sev = evidence.get("severity", "MEDIUM")
+
+        chain = [
+            TraceabilityNodeSchema(
+                node_type="FINDING",
+                status="RESOLVED",
+                record_id=str(ns.id),
+                title=f"Negative Space Indicator ({f_type})",
+                details={"expected": ns.expected_activity, "observed": ns.observed_activity}
+            ),
+            TraceabilityNodeSchema(node_type="CASE_INCIDENT", status="NOT_OBSERVED", details={"reason": "No direct Incident record."}),
+            TraceabilityNodeSchema(node_type="INVESTIGATION", status="NOT_OBSERVED", details={"reason": "No direct Investigation record."}),
+            TraceabilityNodeSchema(node_type="ALERT_EVENT", status="NOT_OBSERVED", details={"reason": "Absence of expected telemetry."}),
+            TraceabilityNodeSchema(
+                node_type="NORMALIZED_EVIDENCE",
+                status="RESOLVED" if evidence else "NOT_OBSERVED",
+                record_id=str(ns.id),
+                title="Telemetry Baseline Comparison Evidence",
+                details=sanitize_evidence_payload(evidence)
+            )
+        ]
+
+        return FindingDetailResponseSchema(
+            finding_id=ns.id,
+            finding_type=f_type,
+            category="NEGATIVE_SPACE",
+            severity=sev,
+            risk_score=70.0 if sev == "HIGH" else 50.0,
+            title=f"Negative Space Indicator: {f_type}",
+            summary=ns.potential_indicator or ns.observed_activity,
+            reason=ns.expected_activity,
+            evidence_references=evidence,
+            analytical_signals=ns.baseline_comparison,
+            created_at=ns.created_at,
+            evidence_chain=chain
+        )
+
+    # 3. Search OperationalFinding
+    op = db.scalar(select(OperationalFinding).where(OperationalFinding.id == finding_id))
+    if op:
+        chain = [
+            TraceabilityNodeSchema(node_type="FINDING", status="RESOLVED", record_id=str(op.id), title=op.title, details={"category": op.category, "impact": op.impact}),
+            TraceabilityNodeSchema(node_type="CASE_INCIDENT", status="NOT_OBSERVED", details={"reason": "No incident record"}),
+            TraceabilityNodeSchema(node_type="INVESTIGATION", status="NOT_OBSERVED", details={"reason": "No investigation record"}),
+            TraceabilityNodeSchema(node_type="ALERT_EVENT", status="NOT_OBSERVED", details={"reason": "No alert record"}),
+            TraceabilityNodeSchema(node_type="NORMALIZED_EVIDENCE", status="RESOLVED", record_id=str(op.id), title="Recommendations Payload", details=sanitize_evidence_payload(op.recommendations or {}))
+        ]
+        return FindingDetailResponseSchema(
+            finding_id=op.id,
+            finding_type=op.category,
+            category=op.category,
+            severity=op.severity,
+            risk_score=60.0,
+            title=op.title,
+            summary=op.impact,
+            reason=op.impact,
+            evidence_references=op.recommendations,
+            created_at=op.created_at,
+            evidence_chain=chain
+        )
+
+    # 4. Search ReviewPriority
+    rp = db.scalar(select(ReviewPriority).where(ReviewPriority.id == finding_id))
+    if rp:
+        reasons = rp.reasons or {}
+        chain_data = reasons.get("supporting_findings", [])
+        nodes = []
+        for item in chain_data:
+            nodes.append(TraceabilityNodeSchema(
+                node_type=item.get("level", "TRACE"),
+                status="RESOLVED",
+                record_id=item.get("id") or str(rp.id),
+                title=item.get("title") or item.get("level"),
+                details=sanitize_evidence_payload(item)
+            ))
+        if not nodes:
+            nodes = [
+                TraceabilityNodeSchema(node_type="FINDING", status="RESOLVED", record_id=str(rp.id), title=f"Review Priority #{reasons.get('rank', 1)}", details=reasons),
+                TraceabilityNodeSchema(node_type="NORMALIZED_EVIDENCE", status="RESOLVED", record_id=str(rp.id), title="Priority Evidence References", details=sanitize_evidence_payload(reasons.get("evidence_references")))
+            ]
+
+        return FindingDetailResponseSchema(
+            finding_id=rp.id,
+            finding_type=f"REVIEW_PRIORITY_{rp.target_type}",
+            category="REVIEW_PRIORITY",
+            severity=reasons.get("severity", "MEDIUM"),
+            risk_score=rp.priority_score,
+            title=f"Review Priority: {rp.target_type} Target",
+            summary=reasons.get("reason", "Requires analyst review."),
+            reason=reasons.get("reason", "Requires analyst review."),
+            evidence_references=reasons.get("evidence_references"),
+            created_at=rp.created_at,
+            evidence_chain=nodes
+        )
+
+    # 5. Search PeerBenchmark
+    pb = db.scalar(select(PeerBenchmark).where(PeerBenchmark.id == finding_id))
+    if pb:
+        ctx = pb.comparison_context or {}
+        chain = [
+            TraceabilityNodeSchema(node_type="FINDING", status="RESOLVED", record_id=str(pb.id), title=pb.metric_name, details=ctx),
+            TraceabilityNodeSchema(node_type="NORMALIZED_EVIDENCE", status="RESOLVED", record_id=str(pb.id), title="Peer Baseline Comparison Context", details=sanitize_evidence_payload(ctx))
+        ]
+        return FindingDetailResponseSchema(
+            finding_id=pb.id,
+            finding_type="PEER_BENCHMARK",
+            category="BENCHMARK",
+            severity="INFO",
+            risk_score=0.0,
+            title=f"Peer Benchmark: {pb.metric_name}",
+            summary=ctx.get("methodology", f"Normalized metric: {pb.normalized_metric}"),
+            reason=f"Peer comparison for {pb.metric_name}",
+            peer_context=ctx,
+            created_at=pb.created_at,
+            evidence_chain=chain
+        )
+
+    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Finding with ID '{finding_id}' not found.")
+
+@router.get("/findings/{finding_id}", response_model=FindingDetailResponseSchema, status_code=status.HTTP_200_OK)
+@router.get("/findings/{finding_id}/traceability", response_model=FindingDetailResponseSchema, status_code=status.HTTP_200_OK)
+async def get_finding_detail_and_traceability(
+    finding_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_analyst: Profile = Depends(require_soc_analyst)
+):
+    """
+    Retrieves evidence-backed finding details and resolves the 5-node traceability chain.
+    Restricted to SOC_ANALYST.
+    """
+    return resolve_finding_detail(db, finding_id)
+
+@router.get("/evidence/{evidence_id}", response_model=EvidenceDetailResponseSchema, status_code=status.HTTP_200_OK)
+async def get_evidence_detail(
+    evidence_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_analyst: Profile = Depends(require_soc_analyst)
+):
+    """
+    Retrieves sanitized evidence record by evidence ID.
+    Restricted to SOC_ANALYST.
+    """
+    ev = db.scalar(select(Evidence).where(Evidence.id == evidence_id))
+    if not ev:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Evidence with ID '{evidence_id}' not found.")
+    
+    sanitized_payload = sanitize_evidence_payload(ev.evidence_payload or {})
+    return EvidenceDetailResponseSchema(
+        id=ev.id,
+        entity_type=ev.entity_type,
+        entity_id=ev.entity_id,
+        evidence_payload=sanitized_payload,
+        sanitized=True,
+        created_at=ev.created_at
+    )
