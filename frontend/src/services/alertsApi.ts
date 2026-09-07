@@ -137,13 +137,38 @@ export async function generateScenarioPreviewApi(token: string, payload: Scenari
 
 export async function getAlertsHistoryApi(
   token: string,
-  params: { page?: number; page_size?: number; category?: string; severity?: string } = {}
+  params: {
+    page?: number;
+    page_size?: number;
+    search?: string;
+    category?: string;
+    severity?: string;
+    status?: string;
+    user?: string;
+    asset?: string;
+    source_ip?: string;
+    event_type?: string;
+    risk_min?: number;
+    risk_max?: number;
+    start_time?: string;
+    end_time?: string;
+  } = {}
 ): Promise<AlertRecord[]> {
   const query = new URLSearchParams();
   if (params.page) query.append('page', params.page.toString());
   if (params.page_size) query.append('page_size', params.page_size.toString());
+  if (params.search) query.append('search', params.search);
   if (params.category) query.append('category', params.category);
   if (params.severity) query.append('severity', params.severity);
+  if (params.status) query.append('status', params.status);
+  if (params.user) query.append('user', params.user);
+  if (params.asset) query.append('asset', params.asset);
+  if (params.source_ip) query.append('source_ip', params.source_ip);
+  if (params.event_type) query.append('event_type', params.event_type);
+  if (params.risk_min !== undefined) query.append('risk_min', params.risk_min.toString());
+  if (params.risk_max !== undefined) query.append('risk_max', params.risk_max.toString());
+  if (params.start_time) query.append('start_time', params.start_time);
+  if (params.end_time) query.append('end_time', params.end_time);
 
   const res = await fetch(`${API_BASE_URL}/alerts?${query.toString()}`, {
     method: 'GET',
@@ -282,3 +307,82 @@ export async function reanalyzeAlertApi(token: string, alertId: string): Promise
 
   return res.json();
 }
+
+export interface RelatedAlertRecord {
+  id: string;
+  alert_code: string;
+  event_type: string;
+  event_category: string;
+  severity: string;
+  status: string;
+  timestamp: string;
+  correlation_reason: string;
+}
+
+export interface AlertIncidentRelationship {
+  id: string;
+  incident_number: string;
+  title: string;
+  severity: string;
+  risk_score: number;
+  confidence_score: number;
+  status: string;
+  created_at: string;
+}
+
+export interface AlertTimelineEvent {
+  event_type: string;
+  description: string;
+  timestamp: string;
+  source?: string;
+}
+
+export async function getRelatedAlertsApi(token: string, alertId: string): Promise<RelatedAlertRecord[]> {
+  const res = await fetch(`${API_BASE_URL}/alerts/${alertId}/related`, {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) return [];
+  return res.json();
+}
+
+export async function getAlertIncidentRelationshipApi(token: string, alertId: string): Promise<AlertIncidentRelationship | null> {
+  const res = await fetch(`${API_BASE_URL}/alerts/${alertId}/incident`, {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) return null;
+  return res.json();
+}
+
+export async function getAlertTimelineApi(token: string, alertId: string): Promise<AlertTimelineEvent[]> {
+  const res = await fetch(`${API_BASE_URL}/alerts/${alertId}/timeline`, {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) return [];
+  return res.json();
+}
+
+export async function getAlertAiRecordApi(token: string, alertId: string): Promise<any | null> {
+  const res = await fetch(`${API_BASE_URL}/alerts/${alertId}/ai`, {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) return null;
+  return res.json();
+}
+
+export async function generateAlertAiIntelligenceApi(token: string, alertId: string, forceRefresh = false): Promise<any> {
+  const query = forceRefresh ? '?force_refresh=true' : '';
+  const res = await fetch(`${API_BASE_URL}/ai/alerts/${alertId}/intelligence${query}`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({ detail: 'Failed to generate AI intelligence' }));
+    throw new Error(errorData.detail || `Server returned status ${res.status}`);
+  }
+  return res.json();
+}
+

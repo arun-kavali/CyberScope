@@ -97,3 +97,34 @@ class ScenarioPreviewResponseSchema(BaseModel):
     intent: str
     generated_count: int
     alerts: List[Dict[str, Any]]
+
+class RelatedAlertSchema(BaseModel):
+    id: UUID
+    alert_code: str
+    event_type: str
+    event_category: str
+    severity: str
+    status: str
+    timestamp: datetime
+    correlation_reason: str
+
+    model_config = ConfigDict(from_attributes=True)
+
+class AlertIncidentRelationshipSchema(BaseModel):
+    id: UUID
+    incident_number: str
+    title: str
+    severity: str
+    risk_score: float
+    confidence_score: float
+    status: str
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+class AlertTimelineEventSchema(BaseModel):
+    event_type: str
+    description: str
+    timestamp: datetime
+    source: Optional[str] = "SYSTEM"
+

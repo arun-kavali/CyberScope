@@ -1,15 +1,23 @@
 import random
 import uuid
 from datetime import datetime, timezone
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import select, func, desc
+from sqlalchemy import select, func, desc, or_, and_, cast, String
 
 from app.db.session import get_db
 from app.models.identity import Profile
 from app.models.evidence import Alert
-from app.models.intelligence import AlertAnalysis
+from app.models.intelligence import (
+    AlertAnalysis,
+    RiskScore,
+    AnomalyScore,
+    CorrelationResult,
+    Incident,
+    IncidentAlert,
+    AIIntelligence
+)
 from app.models.sources import AlertSource
 from app.auth.dependencies import get_current_user, require_alert_source, require_soc_analyst
 from app.schemas.alerts import (
@@ -20,8 +28,12 @@ from app.schemas.alerts import (
     ScenarioGenerateRequestSchema,
     ScenarioPreviewResponseSchema,
     IngestionResultSchema,
-    AlertAnalysisResponseSchema
+    AlertAnalysisResponseSchema,
+    RelatedAlertSchema,
+    AlertIncidentRelationshipSchema,
+    AlertTimelineEventSchema
 )
+from app.schemas.ai import AIIntelligenceResponse
 from app.services.generator import generate_synthetic_alerts_data, EXACT_SCENARIO_CATEGORIES
 from app.services.ingestion import process_alert_ingestion
 from app.services.triage import execute_alert_triage
@@ -144,20 +156,87 @@ async def generate_scenario_preview(
 async def list_submitted_alerts(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
+    search: Optional[str] = Query(None),
+    alert_id: Optional[str] = Query(None),
+    incident_id: Optional[str] = Query(None),
+    user: Optional[str] = Query(None),
+    asset: Optional[str] = Query(None),
+    source_ip: Optional[str] = Query(None),
+    event_type: Optional[str] = Query(None),
     category: Optional[str] = Query(None),
     severity: Optional[str] = Query(None),
+    status_filter: Optional[str] = Query(None, alias="status"),
+    risk_min: Optional[float] = Query(None),
+    risk_max: Optional[float] = Query(None),
+    start_time: Optional[datetime] = Query(None),
+    end_time: Optional[datetime] = Query(None),
     db: Session = Depends(get_db),
     current_user: Profile = Depends(get_current_user)
 ):
     """
-    Retrieves real persisted alert submission history from PostgreSQL with pagination.
+    Retrieves real persisted security alert history with server-side search, multi-field filtering, and pagination.
     Accessible to authenticated users.
     """
     query = select(Alert)
-    if category:
-        query = query.where(Alert.event_category == category)
-    if severity:
-        query = query.where(Alert.severity == severity)
+
+    if category and category.upper() != "ALL":
+        query = query.where(Alert.event_category == category.upper())
+    if severity and severity.upper() != "ALL":
+        query = query.where(Alert.severity == severity.upper())
+    if status_filter and status_filter.upper() != "ALL":
+        query = query.where(Alert.status == status_filter.upper())
+    if event_type:
+        query = query.where(Alert.event_type.ilike(f"%{event_type}%"))
+    if user:
+        query = query.where(Alert.user_context.ilike(f"%{user}%"))
+    if asset:
+        query = query.where(Alert.asset_context.ilike(f"%{asset}%"))
+    if source_ip:
+        query = query.where(Alert.source_ip.ilike(f"%{source_ip}%"))
+    if alert_id:
+        query = query.where(
+            or_(
+                Alert.alert_code.ilike(f"%{alert_id}%"),
+                cast(Alert.id, String).ilike(f"%{alert_id}%")
+            )
+        )
+    if start_time:
+        query = query.where(Alert.timestamp >= start_time)
+    if end_time:
+        query = query.where(Alert.timestamp <= end_time)
+
+    if search:
+        search_pattern = f"%{search}%"
+        query = query.where(
+            or_(
+                Alert.alert_code.ilike(search_pattern),
+                Alert.event_type.ilike(search_pattern),
+                Alert.event_category.ilike(search_pattern),
+                Alert.description.ilike(search_pattern),
+                Alert.user_context.ilike(search_pattern),
+                Alert.asset_context.ilike(search_pattern),
+                Alert.source_ip.ilike(search_pattern),
+                Alert.indicator.ilike(search_pattern),
+                Alert.technique.ilike(search_pattern)
+            )
+        )
+
+    if incident_id:
+        query = query.join(IncidentAlert, IncidentAlert.alert_id == Alert.id).where(
+            or_(
+                cast(IncidentAlert.incident_id, String).ilike(f"%{incident_id}%"),
+                IncidentAlert.incident_id.in_(
+                    select(Incident.id).where(Incident.incident_number.ilike(f"%{incident_id}%"))
+                )
+            )
+        )
+
+    if risk_min is not None or risk_max is not None:
+        query = query.join(RiskScore, RiskScore.alert_id == Alert.id)
+        if risk_min is not None:
+            query = query.where(RiskScore.score >= risk_min)
+        if risk_max is not None:
+            query = query.where(RiskScore.score <= risk_max)
 
     query = query.order_by(desc(Alert.created_at)).offset((page - 1) * page_size).limit(page_size)
     alerts = db.scalars(query).all()
@@ -199,7 +278,6 @@ async def get_alert_analysis(
 
     analysis = db.scalar(select(AlertAnalysis).where(AlertAnalysis.alert_id == alert_id))
     if not analysis:
-        # Automatically run triage if analysis record doesn't exist yet
         analysis = execute_alert_triage(db, alert)
 
     return analysis
@@ -223,3 +301,189 @@ async def reanalyze_alert(
 
     analysis = execute_alert_triage(db, alert)
     return analysis
+
+@router.get("/{alert_id}/related", response_model=List[RelatedAlertSchema], status_code=status.HTTP_200_OK)
+async def get_related_alerts(
+    alert_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: Profile = Depends(require_soc_analyst)
+):
+    """
+    Retrieves related alerts based on structured correlation results and shared entity context (user, asset, IP).
+    Restricted to SOC_ANALYST role.
+    """
+    target_alert = db.scalar(select(Alert).where(Alert.id == alert_id))
+    if not target_alert:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Alert with ID '{alert_id}' not found."
+        )
+
+    related_map: Dict[uuid.UUID, str] = {}
+
+    correlations = db.scalars(select(CorrelationResult)).all()
+    for corr in correlations:
+        ids = (corr.correlated_alert_ids or {}).get("alert_ids", [])
+        str_target = str(alert_id)
+        if str_target in ids:
+            for other_id_str in ids:
+                if other_id_str != str_target:
+                    try:
+                        u_id = uuid.UUID(other_id_str)
+                        related_map[u_id] = f"Correlated via rule: {corr.rule_name}"
+                    except ValueError:
+                        pass
+
+    filters = []
+    if target_alert.user_context:
+        filters.append(Alert.user_context == target_alert.user_context)
+    if target_alert.asset_context:
+        filters.append(Alert.asset_context == target_alert.asset_context)
+    if target_alert.source_ip:
+        filters.append(Alert.source_ip == target_alert.source_ip)
+
+    if filters:
+        heur_query = select(Alert).where(and_(Alert.id != alert_id, or_(*filters))).limit(10)
+        heur_alerts = db.scalars(heur_query).all()
+        for ha in heur_alerts:
+            if ha.id not in related_map:
+                reasons = []
+                if ha.user_context and ha.user_context == target_alert.user_context:
+                    reasons.append(f"Shared User '{ha.user_context}'")
+                if ha.asset_context and ha.asset_context == target_alert.asset_context:
+                    reasons.append(f"Shared Asset '{ha.asset_context}'")
+                if ha.source_ip and ha.source_ip == target_alert.source_ip:
+                    reasons.append(f"Shared IP '{ha.source_ip}'")
+                related_map[ha.id] = ", ".join(reasons) or "Matching Context"
+
+    if not related_map:
+        return []
+
+    related_alerts = db.scalars(select(Alert).where(Alert.id.in_(related_map.keys()))).all()
+    res = []
+    for ra in related_alerts:
+        res.append(RelatedAlertSchema(
+            id=ra.id,
+            alert_code=ra.alert_code,
+            event_type=ra.event_type,
+            event_category=ra.event_category,
+            severity=ra.severity,
+            status=ra.status,
+            timestamp=ra.timestamp,
+            correlation_reason=related_map.get(ra.id, "Related Context")
+        ))
+    return res
+
+@router.get("/{alert_id}/incident", response_model=Optional[AlertIncidentRelationshipSchema], status_code=status.HTTP_200_OK)
+async def get_alert_incident_relationship(
+    alert_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: Profile = Depends(require_soc_analyst)
+):
+    """
+    Retrieves the associated Incident record for a given alert if correlated.
+    Restricted to SOC_ANALYST role.
+    """
+    inc_alert = db.scalar(select(IncidentAlert).where(IncidentAlert.alert_id == alert_id))
+    if not inc_alert:
+        return None
+
+    inc = db.scalar(select(Incident).where(Incident.id == inc_alert.incident_id))
+    if not inc:
+        return None
+
+    return AlertIncidentRelationshipSchema(
+        id=inc.id,
+        incident_number=inc.incident_number,
+        title=inc.title,
+        severity=inc.severity,
+        risk_score=inc.risk_score,
+        confidence_score=inc.confidence_score,
+        status=inc.status,
+        created_at=inc.created_at
+    )
+
+@router.get("/{alert_id}/timeline", response_model=List[AlertTimelineEventSchema], status_code=status.HTTP_200_OK)
+async def get_alert_timeline(
+    alert_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: Profile = Depends(require_soc_analyst)
+):
+    """
+    Retrieves chronological activity timeline entries for an alert.
+    Restricted to SOC_ANALYST role.
+    """
+    alert = db.scalar(select(Alert).where(Alert.id == alert_id))
+    if not alert:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Alert with ID '{alert_id}' not found."
+        )
+
+    timeline: List[AlertTimelineEventSchema] = []
+
+    timeline.append(AlertTimelineEventSchema(
+        event_type="ALERT_INGESTED",
+        description=f"Alert {alert.alert_code} ({alert.event_type}) ingested into canonical evidence pipeline",
+        timestamp=alert.created_at,
+        source="INGESTION_PIPELINE"
+    ))
+
+    analysis = db.scalar(select(AlertAnalysis).where(AlertAnalysis.alert_id == alert_id))
+    if analysis:
+        timeline.append(AlertTimelineEventSchema(
+            event_type="TRIAGE_COMPLETED",
+            description=f"Automatic Phase 9 triage completed: {analysis.summary[:100]}...",
+            timestamp=analysis.created_at,
+            source="TRIAGE_ENGINE"
+        ))
+
+    risk_score = db.scalar(select(RiskScore).where(RiskScore.alert_id == alert_id).order_by(desc(RiskScore.timestamp)))
+    if risk_score:
+        timeline.append(AlertTimelineEventSchema(
+            event_type="SCORES_COMPLETED",
+            description=f"Risk Score: {risk_score.score:.1f}/100 | Confidence: {risk_score.confidence:.1f}% | FP Likelihood: {risk_score.false_positive_likelihood:.1f}%",
+            timestamp=risk_score.timestamp,
+            source="SCORING_ENGINE"
+        ))
+
+    inc_link = db.scalar(select(IncidentAlert).where(IncidentAlert.alert_id == alert_id))
+    if inc_link:
+        inc = db.scalar(select(Incident).where(Incident.id == inc_link.incident_id))
+        if inc:
+            timeline.append(AlertTimelineEventSchema(
+                event_type="CORRELATION_COMPLETED",
+                description=f"Correlated into Incident {inc.incident_number}: {inc.title}",
+                timestamp=inc_link.added_at,
+                source="CORRELATION_ENGINE"
+            ))
+
+    ai_rec = db.scalar(select(AIIntelligence).where(and_(AIIntelligence.target_type == "ALERT", AIIntelligence.target_id == alert_id)))
+    if ai_rec:
+        timeline.append(AlertTimelineEventSchema(
+            event_type="AI_INTELLIGENCE",
+            description=f"Local Ollama AI Intelligence analysis status: {ai_rec.status}",
+            timestamp=ai_rec.created_at,
+            source="LOCAL_OLLAMA_AI"
+        ))
+
+    timeline.sort(key=lambda x: x.timestamp)
+    return timeline
+
+@router.get("/{alert_id}/ai", response_model=AIIntelligenceResponse, status_code=status.HTTP_200_OK)
+async def get_alert_ai_record(
+    alert_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: Profile = Depends(require_soc_analyst)
+):
+    """
+    Retrieves existing local Ollama AI intelligence record for an alert if present.
+    Restricted to SOC_ANALYST role.
+    """
+    ai_rec = db.scalar(select(AIIntelligence).where(and_(AIIntelligence.target_type == "ALERT", AIIntelligence.target_id == alert_id)))
+    if not ai_rec:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"No AI intelligence record found for alert '{alert_id}'."
+        )
+    return ai_rec
