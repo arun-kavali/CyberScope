@@ -29,37 +29,67 @@ interface NavItem {
   icon: React.ElementType;
 }
 
-const analystNavItems: NavItem[] = [
-  { name: 'Dashboard', path: '/', icon: LayoutDashboard },
-  { name: 'Alerts', path: '/alerts', icon: Bell },
-  { name: 'Incidents', path: '/incidents', icon: ShieldAlert },
-  { name: 'Investigations', path: '/investigations', icon: Search },
-  { name: 'Data Sources', path: '/sources', icon: Database },
-  { name: 'Analytics', path: '/analytics', icon: BarChart3 },
-  { name: 'Findings', path: '/findings', icon: FileCheck },
-  { name: 'Review Priorities', path: '/priorities', icon: Layers },
-  { name: 'Response', path: '/response', icon: CheckCircle2 },
-  { name: 'Reports', path: '/reports', icon: FileText },
-  { name: 'Audit Trail', path: '/audit', icon: History },
+interface NavSection {
+  title: string;
+  items: NavItem[];
+}
+
+const analystNavSections: NavSection[] = [
+  {
+    title: 'MAIN',
+    items: [
+      { name: 'Dashboard', path: '/', icon: LayoutDashboard },
+      { name: 'Alerts', path: '/alerts', icon: Bell },
+      { name: 'Incidents', path: '/incidents', icon: ShieldAlert },
+      { name: 'Investigations', path: '/investigations', icon: Search },
+    ]
+  },
+  {
+    title: 'OPERATIONS',
+    items: [
+      { name: 'Data Sources', path: '/sources', icon: Database },
+      { name: 'Analytics', path: '/analytics', icon: BarChart3 },
+      { name: 'Findings', path: '/findings', icon: FileCheck },
+      { name: 'Review Priorities', path: '/priorities', icon: Layers },
+    ]
+  },
+  {
+    title: 'RESPONSE',
+    items: [
+      { name: 'Response', path: '/response', icon: CheckCircle2 },
+    ]
+  },
+  {
+    title: 'REPORTING',
+    items: [
+      { name: 'Reports', path: '/reports', icon: FileText },
+      { name: 'Audit Trail', path: '/audit', icon: History },
+    ]
+  }
 ];
 
-const alertSourceNavItems: NavItem[] = [
-  { name: 'Submit Alert', path: '/alert-source', icon: Send },
-  { name: 'Scenario Generator', path: '/alert-source/scenarios', icon: Cpu },
-  { name: 'Submission History', path: '/alert-source/history', icon: History },
+const alertSourceNavSections: NavSection[] = [
+  {
+    title: 'ALERT SOURCE PORTAL',
+    items: [
+      { name: 'Submit Alert', path: '/alert-source', icon: Send },
+      { name: 'Scenario Generator', path: '/alert-source/scenarios', icon: Cpu },
+      { name: 'Submission History', path: '/alert-source/history', icon: History },
+    ]
+  }
 ];
 
 export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen = false, onCloseMobile }) => {
   const { user } = useAuth();
   const isAlertSource = user?.role === 'ALERT_SOURCE';
-  const navItems = isAlertSource ? alertSourceNavItems : analystNavItems;
+  const navSections = isAlertSource ? alertSourceNavSections : analystNavSections;
 
   const sidebarContent = (
     <div className="flex flex-col h-full bg-white text-xs">
-      {/* Top Mobile Header */}
+      {/* Mobile Top Header */}
       <div className="p-3 border-b border-slate-200 flex items-center justify-between md:hidden bg-slate-50">
         <span className="text-[11px] font-bold text-brand-900 uppercase tracking-wider">
-          {isAlertSource ? 'Alert Source Menu' : 'SOC Analyst Navigation'}
+          {isAlertSource ? 'Alert Source Portal' : 'SOC Analyst Navigation'}
         </span>
         <button
           onClick={onCloseMobile}
@@ -70,42 +100,44 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen = false, onCloseMob
         </button>
       </div>
 
-      <div className="py-3 px-2 space-y-4 flex-1 overflow-y-auto">
-        <div className="space-y-0.5">
-          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-2.5 mb-1.5">
-            {isAlertSource ? 'Alert Source Center' : 'SOC Monitoring'}
+      <div className="py-3 px-2 space-y-5 flex-1 overflow-y-auto">
+        {navSections.map((section) => (
+          <div key={section.title} className="space-y-1">
+            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-2.5 mb-1">
+              {section.title}
+            </div>
+            <nav aria-label={section.title} className="space-y-0.5">
+              {section.items.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <NavLink
+                    key={item.path}
+                    to={item.path}
+                    end={item.path === '/' || item.path === '/alert-source'}
+                    onClick={onCloseMobile}
+                    className={({ isActive }) =>
+                      `flex items-center space-x-2.5 px-2.5 py-1.5 text-xs rounded-md transition-colors ${
+                        isActive
+                          ? 'bg-emerald-50 text-brand-900 font-bold border-l-3 border-brand-600 shadow-2xs'
+                          : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium'
+                      }`
+                    }
+                  >
+                    <Icon className="h-3.5 w-3.5 shrink-0 text-brand-600" />
+                    <span>{item.name}</span>
+                  </NavLink>
+                );
+              })}
+            </nav>
           </div>
-          <nav aria-label="Sidebar Navigation" className="space-y-0.5">
-            {navItems.map((item) => {
-              const Icon = item.icon;
-              return (
-                <NavLink
-                  key={item.path}
-                  to={item.path}
-                  end={item.path === '/' || item.path === '/alert-source'}
-                  onClick={onCloseMobile}
-                  className={({ isActive }) =>
-                    `flex items-center space-x-2 px-2.5 py-1.5 text-xs rounded-md transition-colors ${
-                      isActive
-                        ? 'bg-emerald-50 text-brand-900 font-bold border-l-3 border-brand-600 shadow-2xs'
-                        : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium'
-                    }`
-                  }
-                >
-                  <Icon className="h-3.5 w-3.5 shrink-0 text-brand-600" />
-                  <span>{item.name}</span>
-                </NavLink>
-              );
-            })}
-          </nav>
-        </div>
+        ))}
       </div>
 
-      {/* Footer info */}
+      {/* Footer Branding */}
       <div className="p-3 border-t border-slate-200 bg-surface-subtle">
         <div className="text-[10px] text-slate-500 space-y-0.5">
           <p className="font-bold text-brand-900">CyberScope v1.0 SOC</p>
-          <p className="text-slate-500">Enterprise SOC System</p>
+          <p className="text-slate-500">Offline-First Platform</p>
         </div>
       </div>
     </div>
@@ -118,7 +150,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen = false, onCloseMob
         {sidebarContent}
       </aside>
 
-      {/* Mobile Slide-over Drawer Backdrop */}
+      {/* Mobile Backdrop */}
       {mobileOpen && (
         <div
           className="fixed inset-0 bg-slate-900/40 z-50 md:hidden backdrop-blur-xs"
@@ -126,7 +158,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen = false, onCloseMob
         />
       )}
 
-      {/* Mobile Slide-over Drawer */}
+      {/* Mobile Drawer */}
       <div
         className={`fixed inset-y-0 left-0 w-56 bg-white z-50 transform transition-transform duration-200 ease-in-out md:hidden shadow-xl ${
           mobileOpen ? 'translate-x-0' : '-translate-x-full'
