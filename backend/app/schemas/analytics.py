@@ -67,3 +67,50 @@ class OperationalFindingSchema(BaseModel):
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+class ExecutionGapResponseSchema(BaseModel):
+    id: UUID
+    finding_type: str
+    severity: str
+    reason: str
+    evidence: Optional[Dict[str, Any]] = None
+    supporting_records: Optional[Dict[str, Any]] = None
+    threshold: Optional[float] = None
+    peer_context: Optional[Dict[str, Any]] = None
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+class NegativeSpaceResponseSchema(BaseModel):
+    id: UUID
+    finding_type: Optional[str] = "NEGATIVE_SPACE"
+    severity: Optional[str] = "MEDIUM"
+    expected_activity: str
+    observed_activity: str
+    baseline_comparison: Optional[Dict[str, Any]] = None
+    potential_indicator: Optional[str] = None
+    supporting_evidence: Optional[Dict[str, Any]] = None
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+class PeerBenchmarkResponseSchema(BaseModel):
+    id: UUID
+    metric_name: str
+    normalized_metric: float
+    peer_group: str
+    comparison_context: Optional[Dict[str, Any]] = None
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+class OperationalAnomalySchema(BaseModel):
+    id: str
+    metric: str
+    baseline: float
+    observed: float
+    deviation: float
+    interpretation: str
+    threshold_method: str
+    supporting_records: Optional[Dict[str, Any]] = None
+    timestamp: datetime

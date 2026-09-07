@@ -75,7 +75,7 @@ class ReviewPriority(Base):
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
-    target_type: Mapped[str] = mapped_column(String(50), index=True, nullable=False) # e.g. ALERT, INCIDENT, FINDING
+    target_type: Mapped[str] = mapped_column(String(50), index=True, nullable=False)
     target_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True, nullable=False)
     priority_score: Mapped[float] = mapped_column(Float, nullable=False)
     reasons: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSONB, nullable=True)

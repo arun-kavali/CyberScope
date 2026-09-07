@@ -72,50 +72,110 @@ export interface OperationalFinding {
   created_at: string;
 }
 
+export interface ExecutionGapRecord {
+  id: string;
+  finding_type: string;
+  severity: string;
+  reason: string;
+  evidence?: Record<string, any>;
+  supporting_records?: Record<string, any>;
+  threshold?: number;
+  peer_context?: Record<string, any>;
+  created_at: string;
+}
+
+export interface NegativeSpaceRecord {
+  id: string;
+  finding_type?: string;
+  severity?: string;
+  expected_activity: string;
+  observed_activity: string;
+  baseline_comparison?: Record<string, any>;
+  potential_indicator?: string;
+  supporting_evidence?: Record<string, any>;
+  created_at: string;
+}
+
+export interface PeerBenchmarkRecord {
+  id: string;
+  metric_name: string;
+  normalized_metric: number;
+  peer_group: string;
+  comparison_context?: Record<string, any>;
+  created_at: string;
+}
+
+export interface OperationalAnomalyRecord {
+  id: string;
+  metric: string;
+  baseline: number;
+  observed: number;
+  deviation: number;
+  interpretation: string;
+  threshold_method: string;
+  supporting_records?: Record<string, any>;
+  timestamp: string;
+}
+
 export async function runOperationalAnalyticsApi(token: string, days = 30): Promise<OperationalAnalyticsSummary> {
   const res = await fetch(`${API_BASE_URL}/analytics/run?days=${days}`, {
     method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
+    headers: { Authorization: `Bearer ${token}` },
   });
-
-  if (!res.ok) {
-    const errorData = await res.json().catch(() => ({ detail: 'Failed to run operational analytics' }));
-    throw new Error(errorData.detail || `Server returned status ${res.status}`);
-  }
-
+  if (!res.ok) throw new Error('Failed to run operational analytics');
   return res.json();
 }
 
 export async function getOperationalAnalyticsSummaryApi(token: string, days = 30): Promise<OperationalAnalyticsSummary> {
   const res = await fetch(`${API_BASE_URL}/analytics/summary?days=${days}`, {
     method: 'GET',
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
+    headers: { Authorization: `Bearer ${token}` },
   });
-
-  if (!res.ok) {
-    const errorData = await res.json().catch(() => ({ detail: 'Failed to fetch operational analytics summary' }));
-    throw new Error(errorData.detail || `Server returned status ${res.status}`);
-  }
-
+  if (!res.ok) throw new Error('Failed to fetch analytics summary');
   return res.json();
 }
 
 export async function getOperationalFindingsApi(token: string): Promise<OperationalFinding[]> {
   const res = await fetch(`${API_BASE_URL}/analytics/findings`, {
     method: 'GET',
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
+    headers: { Authorization: `Bearer ${token}` },
   });
+  if (!res.ok) return [];
+  return res.json();
+}
 
-  if (!res.ok) {
-    const errorData = await res.json().catch(() => ({ detail: 'Failed to fetch operational findings' }));
-    throw new Error(errorData.detail || `Server returned status ${res.status}`);
-  }
+export async function getExecutionGapsApi(token: string): Promise<ExecutionGapRecord[]> {
+  const res = await fetch(`${API_BASE_URL}/analytics/execution-gaps`, {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) return [];
+  return res.json();
+}
 
+export async function getNegativeSpaceApi(token: string): Promise<NegativeSpaceRecord[]> {
+  const res = await fetch(`${API_BASE_URL}/analytics/negative-space`, {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) return [];
+  return res.json();
+}
+
+export async function getPeerBenchmarksApi(token: string): Promise<PeerBenchmarkRecord[]> {
+  const res = await fetch(`${API_BASE_URL}/analytics/peer-benchmarks`, {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) return [];
+  return res.json();
+}
+
+export async function getOperationalAnomaliesApi(token: string): Promise<OperationalAnomalyRecord[]> {
+  const res = await fetch(`${API_BASE_URL}/analytics/anomalies`, {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) return [];
   return res.json();
 }
