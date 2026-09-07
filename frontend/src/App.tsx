@@ -2,6 +2,7 @@ import React from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider } from './context/AuthContext';
+import { RealtimeProvider } from './context/RealtimeContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { RoleProtectedRoute } from './components/RoleProtectedRoute';
 
@@ -44,53 +45,55 @@ export const App: React.FC = () => {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <BrowserRouter>
-          <Routes>
-            {/* Public Login Route */}
-            <Route path="/login" element={<LoginPage />} />
+        <RealtimeProvider>
+          <BrowserRouter>
+            <Routes>
+              {/* Public Login Route */}
+              <Route path="/login" element={<LoginPage />} />
 
-            {/* Protected Alert Source Shell */}
-            <Route
-              path="/alert-source"
-              element={
-                <ProtectedRoute>
-                  <RoleProtectedRoute allowedRoles={['ALERT_SOURCE']}>
-                    <AlertSourceLayout />
-                  </RoleProtectedRoute>
-                </ProtectedRoute>
-              }
-            >
-              <Route index element={<AlertSourceSubmitPage />} />
-              <Route path="scenarios" element={<AlertSourceScenariosPage />} />
-              <Route path="history" element={<AlertSourceHistoryPage />} />
-            </Route>
+              {/* Protected Alert Source Shell */}
+              <Route
+                path="/alert-source"
+                element={
+                  <ProtectedRoute>
+                    <RoleProtectedRoute allowedRoles={['ALERT_SOURCE']}>
+                      <AlertSourceLayout />
+                    </RoleProtectedRoute>
+                  </ProtectedRoute>
+                }
+              >
+                <Route index element={<AlertSourceSubmitPage />} />
+                <Route path="scenarios" element={<AlertSourceScenariosPage />} />
+                <Route path="history" element={<AlertSourceHistoryPage />} />
+              </Route>
 
-            {/* Protected SOC Analyst Shell */}
-            <Route
-              path="/"
-              element={
-                <ProtectedRoute>
-                  <RoleProtectedRoute allowedRoles={['SOC_ANALYST']}>
-                    <AppLayout />
-                  </RoleProtectedRoute>
-                </ProtectedRoute>
-              }
-            >
-              <Route index element={<DashboardPage />} />
-              <Route path="alerts" element={<AlertsPage />} />
-              <Route path="incidents" element={<IncidentsPage />} />
-              <Route path="investigations" element={<InvestigationsPage />} />
-              <Route path="sources" element={<DataSourcesPage />} />
-              <Route path="analytics" element={<AnalyticsPage />} />
-              <Route path="findings" element={<FindingsPage />} />
-              <Route path="priorities" element={<ReviewPrioritiesPage />} />
-              <Route path="response" element={<ResponsePage />} />
-              <Route path="reports" element={<ReportsPage />} />
-              <Route path="audit" element={<AuditPage />} />
-              <Route path="*" element={<NotFoundPage />} />
-            </Route>
-          </Routes>
-        </BrowserRouter>
+              {/* Protected SOC Analyst Shell */}
+              <Route
+                path="/"
+                element={
+                  <ProtectedRoute>
+                    <RoleProtectedRoute allowedRoles={['SOC_ANALYST']}>
+                      <AppLayout />
+                    </RoleProtectedRoute>
+                  </ProtectedRoute>
+                }
+              >
+                <Route index element={<DashboardPage />} />
+                <Route path="alerts" element={<AlertsPage />} />
+                <Route path="incidents" element={<IncidentsPage />} />
+                <Route path="investigations" element={<InvestigationsPage />} />
+                <Route path="sources" element={<DataSourcesPage />} />
+                <Route path="analytics" element={<AnalyticsPage />} />
+                <Route path="findings" element={<FindingsPage />} />
+                <Route path="priorities" element={<ReviewPrioritiesPage />} />
+                <Route path="response" element={<ResponsePage />} />
+                <Route path="reports" element={<ReportsPage />} />
+                <Route path="audit" element={<AuditPage />} />
+                <Route path="*" element={<NotFoundPage />} />
+              </Route>
+            </Routes>
+          </BrowserRouter>
+        </RealtimeProvider>
       </AuthProvider>
     </QueryClientProvider>
   );

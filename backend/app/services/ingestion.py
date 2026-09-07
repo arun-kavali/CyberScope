@@ -176,6 +176,14 @@ def process_alert_ingestion(
     db.commit()
     db.refresh(db_alert)
 
+    # Publish Phase 8 ALERT_CREATED event to connected SOC Analyst clients
+    try:
+        from app.realtime.publisher import publish_alert_created
+        publish_alert_created(db_alert)
+    except Exception as e:
+        import logging
+        logging.getLogger("cyberscope.ingestion").error(f"Error publishing realtime alert event: {e}")
+
     return IngestionResult(
         status="SUCCESS",
         alert_id=db_alert.id,

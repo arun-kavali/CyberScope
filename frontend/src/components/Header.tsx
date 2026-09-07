@@ -1,7 +1,8 @@
 import React from 'react';
-import { Shield, Activity, RefreshCw, LogOut, User, Menu } from 'lucide-react';
+import { Shield, Activity, RefreshCw, LogOut, User, Menu, Radio } from 'lucide-react';
 import { useHealth } from '../hooks/useHealth';
 import { useAuth } from '../context/AuthContext';
+import { useRealtime } from '../hooks/useRealtime';
 
 interface HeaderProps {
   onToggleMobileSidebar?: () => void;
@@ -10,6 +11,7 @@ interface HeaderProps {
 export const Header: React.FC<HeaderProps> = ({ onToggleMobileSidebar }) => {
   const { data: health, isLoading, isError, refetch } = useHealth();
   const { user, logout } = useAuth();
+  const { status: realtimeStatus } = useRealtime();
 
   return (
     <header className="bg-white border-b border-slate-200 px-4 sm:px-6 py-3 flex items-center justify-between shadow-sm sticky top-0 z-40">
@@ -39,6 +41,27 @@ export const Header: React.FC<HeaderProps> = ({ onToggleMobileSidebar }) => {
       </div>
 
       <div className="flex items-center space-x-3 sm:space-x-4">
+        {/* Realtime Stream Indicator for SOC Analysts */}
+        {user?.role === 'SOC_ANALYST' && (
+          <div className="hidden sm:flex items-center space-x-2 text-xs bg-surface-subtle px-3 py-1.5 rounded-full border border-slate-200">
+            <Radio className="h-3.5 w-3.5 text-slate-500" />
+            <span className="text-slate-600 font-medium">Realtime:</span>
+            {realtimeStatus === 'CONNECTED' ? (
+              <span className="flex items-center text-emerald-700 font-semibold">
+                <span className="h-2 w-2 rounded-full bg-emerald-500 mr-1.5"></span> Live
+              </span>
+            ) : realtimeStatus === 'CONNECTING' ? (
+              <span className="flex items-center text-amber-600 font-medium">
+                <RefreshCw className="h-3 w-3 animate-spin mr-1" /> Connecting
+              </span>
+            ) : (
+              <span className="flex items-center text-slate-500 font-medium">
+                <span className="h-2 w-2 rounded-full bg-slate-400 mr-1.5"></span> Standby
+              </span>
+            )}
+          </div>
+        )}
+
         {/* Backend Health Status Indicator */}
         <div className="hidden lg:flex items-center space-x-2 text-xs bg-surface-subtle px-3 py-1.5 rounded-full border border-slate-200">
           <Activity className="h-3.5 w-3.5 text-slate-500" />

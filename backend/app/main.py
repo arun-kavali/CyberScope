@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.api.router import api_router
-from app.api import auth, alerts
+from app.api import auth, alerts, ws
 from app.db.session import SessionLocal
 from app.auth.service import seed_default_users
 
@@ -60,10 +60,10 @@ async def root_health_check():
         "service": "cyberscope-api"
     }
 
-# Direct root-level /auth and /alerts routes (as required by spec)
+# Direct root-level /auth, /alerts, and /ws routes
 app.include_router(auth.router)
 app.include_router(alerts.router)
+app.include_router(ws.router)
 
 # Include API v1 routes (/api/v1/...)
 app.include_router(api_router, prefix=settings.API_V1_STR)
-
