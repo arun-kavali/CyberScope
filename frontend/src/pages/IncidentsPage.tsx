@@ -12,7 +12,12 @@ import {
   User,
   HardDrive,
   Filter,
-  Search
+  Search,
+  Shield,
+  UserX,
+  CheckCircle2,
+  Info,
+  Lock
 } from 'lucide-react';
 import { 
   fetchIncidents, 
@@ -360,6 +365,78 @@ export const IncidentsPage: React.FC = () => {
                   <div className="p-4 bg-white border border-slate-200 rounded-xl">
                     <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-1">Incident Summary</h4>
                     <p className="text-xs text-slate-700 leading-relaxed">{detailData.summary}</p>
+                  </div>
+
+                  {/* AI Callout Banner matching Reference Image 5 */}
+                  <div className="p-3.5 bg-blue-50/80 border border-blue-200 rounded-xl flex items-center space-x-3 text-xs text-blue-900 font-medium">
+                    <Info className="h-5 w-5 text-blue-600 shrink-0" />
+                    <span>Click <strong>"Start Investigation"</strong> below to generate AI Incident Intelligence with attack patterns, business impact, and containment steps.</span>
+                  </div>
+
+                  {/* Action Panel Card matching Reference Image 5 */}
+                  <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center space-x-1.5">
+                        <Shield className="h-4 w-4 text-amber-600" />
+                        <span>Action Panel</span>
+                      </h4>
+                      <span className="text-[10px] font-semibold text-slate-500 bg-white px-2 py-0.5 rounded border border-slate-200">Controlled Sandbox Actions</span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <button
+                        onClick={() => navigate(`/response?action=block_ip`)}
+                        className="p-3 bg-white hover:bg-slate-100 border border-slate-200 rounded-lg text-left transition-colors space-y-1 group"
+                      >
+                        <div className="flex items-center space-x-1.5 font-bold text-slate-900 text-xs group-hover:text-brand-700">
+                          <Lock className="h-3.5 w-3.5 text-slate-500" />
+                          <span>Block IP</span>
+                        </div>
+                        <p className="text-[10px] text-slate-500 leading-tight">Block the source IP address at the perimeter firewall</p>
+                      </button>
+
+                      <button
+                        onClick={() => navigate(`/response?action=disable_user`)}
+                        className="p-3 bg-white hover:bg-slate-100 border border-slate-200 rounded-lg text-left transition-colors space-y-1 group"
+                      >
+                        <div className="flex items-center space-x-1.5 font-bold text-slate-900 text-xs group-hover:text-brand-700">
+                          <UserX className="h-3.5 w-3.5 text-slate-500" />
+                          <span>Disable User</span>
+                        </div>
+                        <p className="text-[10px] text-slate-500 leading-tight">Disable compromised user account credentials</p>
+                      </button>
+
+                      <button
+                        onClick={() => navigate(`/response?action=confirm_containment`)}
+                        className="p-3 bg-white hover:bg-slate-100 border border-slate-200 rounded-lg text-left transition-colors space-y-1 group"
+                      >
+                        <div className="flex items-center space-x-1.5 font-bold text-slate-900 text-xs group-hover:text-brand-700">
+                          <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+                          <span>Confirm Containment</span>
+                        </div>
+                        <p className="text-[10px] text-slate-500 leading-tight">Confirm threat has been isolated and contained</p>
+                      </button>
+                    </div>
+
+                    <div className="pt-2 flex items-center space-x-2">
+                      <button
+                        onClick={(e) => handleStartInvestigation(detailData.id, e)}
+                        className="flex-1 py-2 bg-brand-600 hover:bg-brand-700 text-white font-bold text-xs rounded-lg shadow-sm transition-colors flex items-center justify-center space-x-1.5"
+                      >
+                        <Search className="h-3.5 w-3.5" />
+                        <span>Start Investigation</span>
+                      </button>
+
+                      {detailData.status !== 'RESOLVED' && (
+                        <button
+                          onClick={() => navigate(`/response?incident_id=${detailData.id}`)}
+                          className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg shadow-sm transition-colors flex items-center justify-center space-x-1.5"
+                        >
+                          <CheckCircle2 className="h-3.5 w-3.5" />
+                          <span>Resolve Incident</span>
+                        </button>
+                      )}
+                    </div>
                   </div>
 
                   {/* Correlation Explanation Card */}
