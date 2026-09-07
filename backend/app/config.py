@@ -24,10 +24,13 @@ class Settings(BaseSettings):
     DATABASE_MODE: str = "local"
     DATABASE_URL: str = "postgresql://postgres:postgres@localhost:5432/cyberscope"
     
-    # LLM configuration placeholders (Not initialized in Phase 1)
+    # LLM configuration
     LLM_MODE: str = "ollama"
     OLLAMA_BASE_URL: str = "http://localhost:11434"
     OLLAMA_MODEL: str = "llama3"
+    OLLAMA_TIMEOUT: float = 30.0
+    PROMPT_VERSION: str = "1.0"
+    INTELLIGENCE_VERSION: str = "1.0"
     
     # System mode placeholders
     REALTIME_MODE: str = "local"

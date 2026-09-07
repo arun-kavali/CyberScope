@@ -15,7 +15,8 @@ from app.models.intelligence import (
     CorrelationResult,
     AlertAnalysis,
     RiskScore,
-    AnomalyScore
+    AnomalyScore,
+    AIIntelligence
 )
 
 logger = logging.getLogger("cyberscope.investigation")
@@ -303,6 +304,25 @@ def get_incident_intelligence_summary(
                     "created_at": r_inc.created_at.isoformat() if r_inc.created_at else None
                 })
 
+    # Fetch existing AI intelligence if completed
+    ai_record = db.query(AIIntelligence).filter(
+        AIIntelligence.target_id == incident_id,
+        AIIntelligence.status == "COMPLETED"
+    ).order_by(AIIntelligence.created_at.desc()).first()
+
+    ai_intelligence_data = None
+    if ai_record and ai_record.structured_output:
+        ai_intelligence_data = {
+            "id": str(ai_record.id),
+            "intelligence_type": ai_record.intelligence_type,
+            "status": ai_record.status,
+            "model_name": ai_record.model_name,
+            "prompt_version": ai_record.prompt_version,
+            "structured_output": ai_record.structured_output,
+            "evidence_references": ai_record.evidence_references,
+            "updated_at": ai_record.updated_at.isoformat() if ai_record.updated_at else None
+        }
+
     return {
         "incident_id": str(incident.id),
         "incident_number": incident.incident_number,
@@ -318,5 +338,7 @@ def get_incident_intelligence_summary(
         "evidence_chain": evidence_chain,
         "notes": notes_list,
         "related_incidents": related_incidents_list,
+        "ai_intelligence": ai_intelligence_data,
         "recommendations_placeholder": "AI intelligence will be available in the next intelligence phase."
     }
+

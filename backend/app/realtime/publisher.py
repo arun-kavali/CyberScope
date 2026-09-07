@@ -359,5 +359,69 @@ def publish_investigation_note_added(note: Dict[str, Any], incident: Any, analys
         except Exception as e:
             logger.error(f"Error publishing investigation note event outside loop: {e}")
 
+async def publish_ai_intelligence_started_async(ai_id: str, target_type: str, target_id: str) -> None:
+    try:
+        payload = {
+            "type": "AI_INTELLIGENCE_STARTED",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "data": {"ai_id": ai_id, "target_type": target_type, "target_id": target_id, "status": "PROCESSING"}
+        }
+        await manager.broadcast_to_role(payload, "SOC_ANALYST")
+    except Exception as e:
+        logger.error(f"Failed to publish AI_INTELLIGENCE_STARTED event: {e}")
+
+async def publish_ai_intelligence_completed_async(ai_id: str, target_type: str, target_id: str, output: Any) -> None:
+    try:
+        payload = {
+            "type": "AI_INTELLIGENCE_COMPLETED",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "data": {"ai_id": ai_id, "target_type": target_type, "target_id": target_id, "status": "COMPLETED", "output": output}
+        }
+        await manager.broadcast_to_role(payload, "SOC_ANALYST")
+    except Exception as e:
+        logger.error(f"Failed to publish AI_INTELLIGENCE_COMPLETED event: {e}")
+
+async def publish_ai_intelligence_failed_async(ai_id: str, target_type: str, target_id: str, error: str) -> None:
+    try:
+        payload = {
+            "type": "AI_INTELLIGENCE_FAILED",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "data": {"ai_id": ai_id, "target_type": target_type, "target_id": target_id, "status": "FAILED", "error": error}
+        }
+        await manager.broadcast_to_role(payload, "SOC_ANALYST")
+    except Exception as e:
+        logger.error(f"Failed to publish AI_INTELLIGENCE_FAILED event: {e}")
+
+async def publish_ai_intelligence_started(ai_id: str, target_type: str, target_id: str) -> None:
+    try:
+        loop = asyncio.get_running_loop()
+        if loop.is_running():
+            loop.create_task(publish_ai_intelligence_started_async(ai_id, target_type, target_id))
+        else:
+            await publish_ai_intelligence_started_async(ai_id, target_type, target_id)
+    except Exception as e:
+        logger.error(f"Error publishing AI started event: {e}")
+
+async def publish_ai_intelligence_completed(ai_id: str, target_type: str, target_id: str, output: Any) -> None:
+    try:
+        loop = asyncio.get_running_loop()
+        if loop.is_running():
+            loop.create_task(publish_ai_intelligence_completed_async(ai_id, target_type, target_id, output))
+        else:
+            await publish_ai_intelligence_completed_async(ai_id, target_type, target_id, output)
+    except Exception as e:
+        logger.error(f"Error publishing AI completed event: {e}")
+
+async def publish_ai_intelligence_failed(ai_id: str, target_type: str, target_id: str, error: str) -> None:
+    try:
+        loop = asyncio.get_running_loop()
+        if loop.is_running():
+            loop.create_task(publish_ai_intelligence_failed_async(ai_id, target_type, target_id, error))
+        else:
+            await publish_ai_intelligence_failed_async(ai_id, target_type, target_id, error)
+    except Exception as e:
+        logger.error(f"Error publishing AI failed event: {e}")
+
+
 
 

@@ -177,6 +177,7 @@ export interface IncidentIntelligenceSummary {
   evidence_chain: Record<string, any>[];
   notes: AnalystNote[];
   related_incidents: Record<string, any>[];
+  ai_intelligence?: Record<string, any>;
   recommendations_placeholder: string;
 }
 

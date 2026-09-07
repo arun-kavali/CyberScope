@@ -14,7 +14,11 @@ import {
   AlertTriangle,
   Info,
   Server,
-  X
+  X,
+  Sparkles,
+  ShieldCheck,
+  CheckSquare,
+  AlertCircle
 } from 'lucide-react';
 import { 
   fetchIncidents, 
@@ -26,6 +30,12 @@ import {
   IncidentIntelligenceSummary,
   IncidentTimelineEvent
 } from '../services/incidentsApi';
+import {
+  fetchAIStatus,
+  generateInvestigationNarrative,
+  AIStatus,
+  AIIntelligenceRecord
+} from '../services/aiApi';
 
 export const InvestigationsPage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -49,6 +59,38 @@ export const InvestigationsPage: React.FC = () => {
 
   // Selected Alert for inspection
   const [inspectAlert, setInspectAlert] = useState<Record<string, any> | null>(null);
+
+  // Local AI Intelligence State
+  const [aiRecord, setAiRecord] = useState<AIIntelligenceRecord | null>(null);
+  const [aiLoading, setAiLoading] = useState<boolean>(false);
+  const [aiError, setAiError] = useState<string | null>(null);
+  const [aiStatus, setAiStatus] = useState<AIStatus | null>(null);
+
+  const checkOllamaStatus = async () => {
+    try {
+      const res = await fetchAIStatus();
+      setAiStatus(res);
+    } catch (e: any) {
+      setAiStatus({ available: false, mode: 'ollama', model: 'llama3', url: 'http://localhost:11434', reason: 'AI service unreachable' });
+    }
+  };
+
+  const handleGenerateAINarrative = async (forceRefresh: boolean = false) => {
+    if (!selectedIncidentId) return;
+    try {
+      setAiLoading(true);
+      setAiError(null);
+      const rec = await generateInvestigationNarrative(selectedIncidentId, forceRefresh);
+      setAiRecord(rec);
+      if (rec.status === 'FAILED') {
+        setAiError(rec.error_info?.error || 'Local Ollama model execution failed.');
+      }
+    } catch (err: any) {
+      setAiError(err.message || 'Failed to connect to local AI service.');
+    } finally {
+      setAiLoading(false);
+    }
+  };
 
   // Load incidents list for dropdown selector
   const loadIncidentsList = async () => {
@@ -89,6 +131,12 @@ export const InvestigationsPage: React.FC = () => {
 
       setIntel(intelRes);
       setTimeline(timelineRes);
+      if (intelRes.ai_intelligence) {
+        setAiRecord(intelRes.ai_intelligence as any);
+      } else {
+        setAiRecord(null);
+      }
+      checkOllamaStatus();
     } catch (err: any) {
       setError(err.message || 'Failed to load investigation workspace data');
     } finally {
@@ -274,22 +322,34 @@ export const InvestigationsPage: React.FC = () => {
                 <h2 className="text-lg font-bold text-slate-900 mt-1">{intel.title}</h2>
               </div>
 
-              {/* Metrics */}
-              <div className="flex items-center space-x-4 bg-slate-50 p-3 rounded-lg border border-slate-200 shrink-0">
-                <div>
-                  <div className="text-[10px] font-semibold text-slate-500 uppercase">Risk Score</div>
-                  <div className="text-lg font-bold text-slate-900">{intel.risk_score} <span className="text-xs font-normal text-slate-500">/ 100</span></div>
+              {/* Metrics & AI Action */}
+              <div className="flex flex-wrap items-center gap-3 shrink-0">
+                <div className="flex items-center space-x-4 bg-slate-50 p-3 rounded-lg border border-slate-200">
+                  <div>
+                    <div className="text-[10px] font-semibold text-slate-500 uppercase">Risk Score</div>
+                    <div className="text-lg font-bold text-slate-900">{intel.risk_score} <span className="text-xs font-normal text-slate-500">/ 100</span></div>
+                  </div>
+                  <div className="h-8 w-px bg-slate-200" />
+                  <div>
+                    <div className="text-[10px] font-semibold text-slate-500 uppercase">Confidence</div>
+                    <div className="text-lg font-bold text-slate-900">{intel.confidence_score}%</div>
+                  </div>
+                  <div className="h-8 w-px bg-slate-200" />
+                  <div>
+                    <div className="text-[10px] font-semibold text-slate-500 uppercase">Evidence Alerts</div>
+                    <div className="text-lg font-bold text-slate-900">{intel.evidence_chain.length}</div>
+                  </div>
                 </div>
-                <div className="h-8 w-px bg-slate-200" />
-                <div>
-                  <div className="text-[10px] font-semibold text-slate-500 uppercase">Confidence</div>
-                  <div className="text-lg font-bold text-slate-900">{intel.confidence_score}%</div>
-                </div>
-                <div className="h-8 w-px bg-slate-200" />
-                <div>
-                  <div className="text-[10px] font-semibold text-slate-500 uppercase">Evidence Alerts</div>
-                  <div className="text-lg font-bold text-slate-900">{intel.evidence_chain.length}</div>
-                </div>
+
+                <button
+                  onClick={() => handleGenerateAINarrative(true)}
+                  disabled={aiLoading}
+                  className="flex items-center space-x-2 bg-emerald-700 hover:bg-emerald-800 text-white font-semibold text-xs px-4 py-3 rounded-lg transition-colors shadow-xs disabled:opacity-50"
+                  title="Generate structured evidence-grounded AI narrative via local Ollama"
+                >
+                  <Sparkles className={`h-4 w-4 ${aiLoading ? 'animate-spin' : ''}`} />
+                  <span>{aiLoading ? 'Running Local Ollama...' : 'Generate AI Narrative'}</span>
+                </button>
               </div>
             </div>
 
@@ -347,6 +407,144 @@ export const InvestigationsPage: React.FC = () => {
                 </div>
               </div>
             </div>
+
+            {/* Phase 14 — Local Ollama AI Intelligence Workspace Section */}
+            {aiLoading ? (
+              <div className="p-6 bg-emerald-50/50 border border-emerald-200 rounded-xl text-center text-xs space-y-2">
+                <RefreshCw className="h-6 w-6 animate-spin mx-auto text-emerald-700" />
+                <p className="font-bold text-emerald-900">Querying Local Ollama AI Model ({aiStatus?.model || 'llama3'})...</p>
+                <p className="text-slate-600">Generating evidence-grounded investigation narrative and advisory recommendations.</p>
+              </div>
+            ) : aiRecord && aiRecord.status === 'COMPLETED' && aiRecord.structured_output ? (
+              <div className="bg-white border-2 border-emerald-600/30 rounded-xl p-5 shadow-sm space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-100 pb-3 gap-2">
+                  <div className="flex items-center space-x-2">
+                    <div className="bg-emerald-700 text-white p-1.5 rounded-lg">
+                      <Sparkles className="h-4 w-4" />
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-slate-900 text-sm">Local Ollama AI Intelligence Narrative</h3>
+                      <p className="text-[11px] text-slate-500">Evidence-grounded explanation assistant • Model: <span className="font-mono font-semibold text-slate-700">{aiRecord.model_name}</span> (Prompt v{aiRecord.prompt_version})</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center space-x-2">
+                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                      COMPLETED
+                    </span>
+                    <button
+                      onClick={() => handleGenerateAINarrative(true)}
+                      className="text-[11px] text-emerald-700 hover:text-emerald-900 font-medium underline flex items-center space-x-1"
+                    >
+                      <RefreshCw className="h-3 w-3" />
+                      <span>Regenerate</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Structured AI Output Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Recommended Investigation Steps */}
+                  <div className="bg-slate-50 border border-slate-200 rounded-lg p-3.5 space-y-2">
+                    <div className="flex items-center space-x-1.5 font-bold text-slate-900 text-xs uppercase tracking-wider">
+                      <CheckSquare className="h-4 w-4 text-brand-600" />
+                      <span>Advisory Investigation Steps</span>
+                    </div>
+                    {aiRecord.structured_output.recommended_investigation.length === 0 ? (
+                      <p className="text-xs text-slate-500 italic">No specific additional investigation steps suggested.</p>
+                    ) : (
+                      <ul className="space-y-1.5 text-xs text-slate-700">
+                        {aiRecord.structured_output.recommended_investigation.map((step, idx) => (
+                          <li key={idx} className="flex items-start space-x-2">
+                            <span className="text-brand-600 font-bold">•</span>
+                            <span>{step}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+
+                  {/* Recommended Response Actions (Advisory Only) */}
+                  <div className="bg-slate-50 border border-slate-200 rounded-lg p-3.5 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-1.5 font-bold text-slate-900 text-xs uppercase tracking-wider">
+                        <ShieldCheck className="h-4 w-4 text-emerald-600" />
+                        <span>Advisory Response Concepts</span>
+                      </div>
+                      <span className="text-[9px] font-semibold text-amber-800 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded">
+                        Advisory Only — No Execution
+                      </span>
+                    </div>
+                    {aiRecord.structured_output.recommended_response.length === 0 ? (
+                      <p className="text-xs text-slate-500 italic">No automated response actions recommended.</p>
+                    ) : (
+                      <div className="flex flex-wrap gap-1.5 pt-1">
+                        {aiRecord.structured_output.recommended_response.map((act, idx) => (
+                          <span key={idx} className="text-xs font-semibold bg-white text-slate-800 border border-slate-300 px-2 py-1 rounded-md shadow-2xs flex items-center">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1.5" />
+                            {act}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Evidence References & Limitations */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                  <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 space-y-1">
+                    <div className="font-bold text-slate-800 text-[11px] uppercase tracking-wider">Validated Evidence References</div>
+                    <div className="flex flex-wrap gap-1.5 pt-1">
+                      {aiRecord.evidence_references && aiRecord.evidence_references.length > 0 ? (
+                        aiRecord.evidence_references.map((ref, idx) => (
+                          <span key={idx} className="text-[10px] font-mono bg-white text-brand-800 border border-brand-200 px-2 py-0.5 rounded font-medium">
+                            {ref.label || ref.id} ({ref.type})
+                          </span>
+                        ))
+                      ) : (
+                        <span className="text-slate-500 italic text-[11px]">All conclusions grounded in supplied incident evidence chain.</span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 space-y-1 text-slate-600">
+                    <div className="font-bold text-slate-800 text-[11px] uppercase tracking-wider flex items-center space-x-1">
+                      <Info className="h-3.5 w-3.5 text-slate-500" />
+                      <span>Uncertainty & Scope Boundaries</span>
+                    </div>
+                    <p className="text-[11px] leading-relaxed">{aiRecord.structured_output.uncertainty || 'Based strictly on observed evidence; further context required.'}</p>
+                  </div>
+                </div>
+              </div>
+            ) : aiStatus && !aiStatus.available ? (
+              <div className="p-4 bg-amber-50/70 border border-amber-200 rounded-xl flex items-center justify-between text-xs text-amber-900">
+                <div className="flex items-center space-x-2">
+                  <AlertCircle className="h-4 w-4 text-amber-700 shrink-0" />
+                  <span>
+                    <strong>Local AI unavailable.</strong> Core security analysis, deterministic rules, risk scoring, anomaly detection, and incident correlation remain fully functional.
+                    {aiStatus.reason && <span className="text-amber-800 block text-[11px] font-mono mt-0.5">({aiStatus.reason})</span>}
+                  </span>
+                </div>
+                <button
+                  onClick={() => checkOllamaStatus()}
+                  className="px-3 py-1 bg-white hover:bg-amber-100 border border-amber-300 text-amber-900 text-xs font-semibold rounded-lg shrink-0 transition-colors"
+                >
+                  Retry Health Check
+                </button>
+              </div>
+            ) : aiError ? (
+              <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-xs text-red-800 flex items-center justify-between">
+                <div>
+                  <strong>AI Generation Note:</strong> {aiError}
+                </div>
+                <button
+                  onClick={() => handleGenerateAINarrative(true)}
+                  className="px-3 py-1 bg-white hover:bg-red-100 border border-red-300 text-red-900 font-semibold rounded-lg shrink-0"
+                >
+                  Try Again
+                </button>
+              </div>
+            ) : null}
           </div>
 
           {/* Main 2-Column Canvas Layout */}

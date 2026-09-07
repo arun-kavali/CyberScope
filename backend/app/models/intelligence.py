@@ -167,3 +167,28 @@ class IncidentTimeline(Base):
     )
 
     incident: Mapped["Incident"] = relationship("Incident", back_populates="timeline_events")
+
+class AIIntelligence(Base):
+    __tablename__ = "ai_intelligence"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    target_type: Mapped[str] = mapped_column(String(50), index=True, nullable=False) # ALERT, INCIDENT, INVESTIGATION
+    target_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True, nullable=False)
+    intelligence_type: Mapped[str] = mapped_column(String(50), index=True, nullable=False) # ALERT_EXPLANATION, INCIDENT_SUMMARY, INVESTIGATION_NARRATIVE
+    status: Mapped[str] = mapped_column(String(20), index=True, default="PENDING", nullable=False) # PENDING, PROCESSING, COMPLETED, FAILED
+    structured_output: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSONB, nullable=True)
+    evidence_references: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSONB, nullable=True)
+    model_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    model_version: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    prompt_version: Mapped[str] = mapped_column(String(20), default="1.0", nullable=False)
+    intelligence_version: Mapped[str] = mapped_column(String(20), default="1.0", nullable=False)
+    error_info: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSONB, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, index=True, nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=False
+    )
+

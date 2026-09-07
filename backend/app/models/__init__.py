@@ -27,6 +27,7 @@ from app.models.intelligence import (
     Incident,
     IncidentAlert,
     IncidentTimeline,
+    AIIntelligence,
 )
 from app.models.analytics import (
     ExecutionGapFinding,
@@ -78,6 +79,7 @@ __all__ = [
     "Incident",
     "IncidentAlert",
     "IncidentTimeline",
+    "AIIntelligence",
     # Analytics
     "ExecutionGapFinding",
     "NegativeSpaceFinding",
