@@ -55,10 +55,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen = false, onCloseMob
   const navItems = isAlertSource ? alertSourceNavItems : analystNavItems;
 
   const sidebarContent = (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full bg-white text-xs">
       {/* Top Mobile Header */}
-      <div className="p-4 border-b border-slate-100 flex items-center justify-between md:hidden">
-        <span className="text-xs font-bold text-brand-900 uppercase tracking-wider">
+      <div className="p-3 border-b border-slate-200 flex items-center justify-between md:hidden bg-slate-50">
+        <span className="text-[11px] font-bold text-brand-900 uppercase tracking-wider">
           {isAlertSource ? 'Alert Source Menu' : 'SOC Analyst Navigation'}
         </span>
         <button
@@ -66,16 +66,16 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen = false, onCloseMob
           className="p-1 text-slate-400 hover:text-slate-600 rounded-lg transition-colors"
           aria-label="Close menu"
         >
-          <X className="h-5 w-5" />
+          <X className="h-4 w-4" />
         </button>
       </div>
 
-      <div className="p-4 space-y-6 flex-1 overflow-y-auto">
-        <div className="space-y-1">
-          <h2 className="text-[11px] font-bold text-slate-400 uppercase tracking-wider px-3 mb-2">
-            {isAlertSource ? 'Alert Source Operations' : 'SOC Operations'}
-          </h2>
-          <nav aria-label="Sidebar Navigation" className="space-y-1">
+      <div className="py-3 px-2 space-y-4 flex-1 overflow-y-auto">
+        <div className="space-y-0.5">
+          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-2.5 mb-1.5">
+            {isAlertSource ? 'Alert Source Center' : 'SOC Monitoring'}
+          </div>
+          <nav aria-label="Sidebar Navigation" className="space-y-0.5">
             {navItems.map((item) => {
               const Icon = item.icon;
               return (
@@ -85,14 +85,14 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen = false, onCloseMob
                   end={item.path === '/' || item.path === '/alert-source'}
                   onClick={onCloseMobile}
                   className={({ isActive }) =>
-                    `flex items-center space-x-2.5 px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
+                    `flex items-center space-x-2 px-2.5 py-1.5 text-xs rounded-md transition-colors ${
                       isActive
-                        ? 'bg-brand-50 text-brand-900 font-semibold border-l-4 border-brand-600'
-                        : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                        ? 'bg-emerald-50 text-brand-900 font-bold border-l-3 border-brand-600 shadow-2xs'
+                        : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium'
                     }`
                   }
                 >
-                  <Icon className="h-4 w-4 shrink-0 text-brand-600" />
+                  <Icon className="h-3.5 w-3.5 shrink-0 text-brand-600" />
                   <span>{item.name}</span>
                 </NavLink>
               );
@@ -102,10 +102,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen = false, onCloseMob
       </div>
 
       {/* Footer info */}
-      <div className="p-4 border-t border-slate-100 bg-surface-subtle">
-        <div className="text-xs text-slate-500 space-y-1">
-          <p className="font-semibold text-brand-900">CyberScope Platform</p>
-          <p className="text-[11px] text-slate-500">Light Green Enterprise SOC Theme</p>
+      <div className="p-3 border-t border-slate-200 bg-surface-subtle">
+        <div className="text-[10px] text-slate-500 space-y-0.5">
+          <p className="font-bold text-brand-900">CyberScope v1.0 SOC</p>
+          <p className="text-slate-500">Enterprise SOC System</p>
         </div>
       </div>
     </div>
@@ -114,21 +114,21 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen = false, onCloseMob
   return (
     <>
       {/* Desktop Persistent Sidebar */}
-      <aside className="hidden md:flex flex-col w-64 bg-white border-r border-slate-200 flex-shrink-0 h-[calc(100vh-61px)]">
+      <aside className="hidden md:flex flex-col w-52 bg-white border-r border-slate-200 flex-shrink-0 h-[calc(100vh-45px)]">
         {sidebarContent}
       </aside>
 
       {/* Mobile Slide-over Drawer Backdrop */}
       {mobileOpen && (
         <div
-          className="fixed inset-0 bg-slate-900/40 z-50 md:hidden backdrop-blur-sm"
+          className="fixed inset-0 bg-slate-900/40 z-50 md:hidden backdrop-blur-xs"
           onClick={onCloseMobile}
         />
       )}
 
       {/* Mobile Slide-over Drawer */}
       <div
-        className={`fixed inset-y-0 left-0 w-64 bg-white z-50 transform transition-transform duration-200 ease-in-out md:hidden shadow-xl ${
+        className={`fixed inset-y-0 left-0 w-56 bg-white z-50 transform transition-transform duration-200 ease-in-out md:hidden shadow-xl ${
           mobileOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >

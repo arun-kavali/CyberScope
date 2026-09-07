@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from app.api import health, test, auth, alerts, analysis, incidents, sources, analytics, response, reports, audit, ws, ai
+from app.api import health, test, auth, alerts, analysis, incidents, sources, analytics, response, reports, audit, ws, ai, dashboard
 
 api_router = APIRouter()
 
@@ -9,6 +9,7 @@ api_router.include_router(test.router)
 
 # Register modular feature routers
 api_router.include_router(auth.router)
+api_router.include_router(dashboard.router)
 api_router.include_router(alerts.router)
 api_router.include_router(ws.router)
 api_router.include_router(analysis.router)

@@ -175,7 +175,7 @@ export const IncidentsPage: React.FC = () => {
       </Card>
 
       {/* Main Incidents Table */}
-      <Card title="Correlated Incidents">
+      <Card title="Correlated Incidents" subtitle="Multi-alert incident groups created by CyberScope Correlation Engine" headerStyle="green">
         {error && (
           <div className="p-4 mb-4 bg-red-50 border border-red-200 text-red-700 rounded-lg text-xs">
             {error}

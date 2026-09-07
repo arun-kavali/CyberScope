@@ -16,15 +16,15 @@ export default {
           500: '#22c55e',
           600: '#16a34a', // Primary Green Action
           700: '#15803d',
-          800: '#166534',
-          900: '#14532d', // Dark Green Heading/Nav
-          950: '#052e16',
+          800: '#126030',
+          900: '#0e4a24', // Deep SOC Header Green
+          950: '#082f17',
         },
         surface: {
           light: '#ffffff',
-          subtle: '#f4fbf7',
-          muted: '#e8f5ee',
-          border: '#d1e7dd',
+          subtle: '#f6faf7',
+          muted: '#eef7f2',
+          border: '#d5e8dc',
         },
         soc: {
           critical: '#dc2626',
@@ -33,6 +33,10 @@ export default {
           low: '#2563eb',
           info: '#0284c7',
         }
+      },
+      boxShadow: {
+        '2xs': '0 1px 2px 0 rgba(0, 0, 0, 0.03)',
+        'xs': '0 1px 3px 0 rgba(0, 0, 0, 0.05)',
       },
       fontFamily: {
         sans: ['Inter', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],

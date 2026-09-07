@@ -16,9 +16,9 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
   breadcrumbs,
 }) => {
   return (
-    <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-3">
+    <div className="bg-white border border-slate-200 rounded-lg p-3.5 shadow-2xs space-y-2">
       {breadcrumbs && breadcrumbs.length > 0 && (
-        <nav aria-label="Breadcrumb" className="flex items-center space-x-2 text-xs text-slate-500">
+        <nav aria-label="Breadcrumb" className="flex items-center space-x-1.5 text-[11px] text-slate-500 font-medium">
           {breadcrumbs.map((crumb, idx) => (
             <React.Fragment key={idx}>
               {idx > 0 && <span className="text-slate-300">/</span>}
@@ -27,24 +27,24 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
                   {crumb.label}
                 </a>
               ) : (
-                <span className="text-slate-700 font-medium">{crumb.label}</span>
+                <span className="text-slate-700">{crumb.label}</span>
               )}
             </React.Fragment>
           ))}
         </nav>
       )}
 
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <div className="flex items-center space-x-3">
-            <h1 className="text-2xl font-bold text-brand-900 tracking-tight">{title}</h1>
+          <div className="flex items-center space-x-2.5">
+            <h1 className="text-lg font-bold text-slate-900 tracking-tight">{title}</h1>
             {phaseBadge && (
-              <span className="bg-brand-50 text-brand-800 text-xs font-semibold px-2.5 py-0.5 rounded-full border border-brand-200">
+              <span className="bg-emerald-50 text-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded border border-emerald-200">
                 {phaseBadge}
               </span>
             )}
           </div>
-          {subtitle && <p className="text-xs text-slate-500 font-medium mt-1">{subtitle}</p>}
+          {subtitle && <p className="text-xs text-slate-500 font-normal mt-0.5">{subtitle}</p>}
         </div>
 
         {actions && <div className="flex items-center space-x-2 shrink-0">{actions}</div>}

@@ -27,8 +27,8 @@ class Settings(BaseSettings):
     # LLM configuration
     LLM_MODE: str = "ollama"
     OLLAMA_BASE_URL: str = "http://localhost:11434"
-    OLLAMA_MODEL: str = "llama3"
-    OLLAMA_TIMEOUT: float = 30.0
+    OLLAMA_MODEL: str = "llama3:latest"
+    OLLAMA_TIMEOUT: float = 300.0
     PROMPT_VERSION: str = "1.0"
     INTELLIGENCE_VERSION: str = "1.0"
     

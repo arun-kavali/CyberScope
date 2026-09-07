@@ -92,7 +92,8 @@ class OllamaService:
             "format": "json",
             "stream": False,
             "options": {
-                "temperature": 0.2
+                "temperature": 0.2,
+                "num_predict": 512
             }
         }
 

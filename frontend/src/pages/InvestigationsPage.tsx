@@ -234,7 +234,7 @@ export const InvestigationsPage: React.FC = () => {
       />
 
       {/* Selector & Actions Control Bar */}
-      <Card>
+      <Card headerStyle="default">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex items-center space-x-3 flex-1">
             <div className="p-2 bg-brand-50 text-brand-700 rounded-lg shrink-0">

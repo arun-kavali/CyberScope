@@ -116,7 +116,7 @@ export const AlertSourceSubmitPage: React.FC = () => {
         </div>
       )}
 
-      <Card title="Synthetic Alert Constructor Form">
+      <Card title="Synthetic Alert Constructor Form" subtitle="Specify event telemetry attributes for ingest & triage evaluation" headerStyle="green">
         <form onSubmit={handleSubmit} className="space-y-5">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>

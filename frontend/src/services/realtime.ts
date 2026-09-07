@@ -75,7 +75,7 @@ export class RealtimeClient {
       this.ws.onmessage = (messageEvent) => {
         try {
           const parsed = JSON.parse(messageEvent.data);
-          if (parsed && parsed.type === 'ALERT_CREATED') {
+          if (parsed && parsed.type) {
             this.notifyEvent(parsed as RealtimeAlertEvent);
           }
         } catch (err) {

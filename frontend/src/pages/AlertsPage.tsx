@@ -120,20 +120,20 @@ export const AlertsPage: React.FC = () => {
       />
 
       {/* Filter Bar */}
-      <Card>
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 text-xs">
-          <div className="flex items-center space-x-2 text-slate-700 font-medium">
-            <Filter className="h-4 w-4 text-slate-400" />
-            <span>Filter Stream:</span>
+      <Card headerStyle="default">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 text-xs">
+          <div className="flex items-center space-x-2 text-slate-800 font-bold uppercase tracking-wider text-[11px]">
+            <Filter className="h-4 w-4 text-brand-700" />
+            <span>Filter Alert Stream:</span>
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
             <div className="flex items-center space-x-2">
-              <label className="text-slate-500 font-medium">Category:</label>
+              <label className="text-slate-600 font-semibold text-[11px]">Category:</label>
               <select
                 value={selectedCategory}
                 onChange={(e) => setSelectedCategory(e.target.value)}
-                className="bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 font-medium focus:ring-1 focus:ring-brand-500 outline-none"
+                className="bg-white border border-slate-300 rounded px-2.5 py-1 text-xs text-slate-800 font-medium focus:ring-1 focus:ring-brand-600 outline-none"
               >
                 <option value="ALL">All Categories</option>
                 <option value="AUTHENTICATION">AUTHENTICATION</option>
@@ -145,11 +145,11 @@ export const AlertsPage: React.FC = () => {
             </div>
 
             <div className="flex items-center space-x-2">
-              <label className="text-slate-500 font-medium">Severity:</label>
+              <label className="text-slate-600 font-semibold text-[11px]">Severity:</label>
               <select
                 value={selectedSeverity}
                 onChange={(e) => setSelectedSeverity(e.target.value)}
-                className="bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 font-medium focus:ring-1 focus:ring-brand-500 outline-none"
+                className="bg-white border border-slate-300 rounded px-2.5 py-1 text-xs text-slate-800 font-medium focus:ring-1 focus:ring-brand-600 outline-none"
               >
                 <option value="ALL">All Severities</option>
                 <option value="CRITICAL">CRITICAL</option>
@@ -163,7 +163,8 @@ export const AlertsPage: React.FC = () => {
       </Card>
 
       {/* Live Alerts Table */}
-      <Card title="Live Ingested Alerts Log" subtitle="Click any alert row to view automatic Phase 9 triage, detection rules & context enrichment">
+      <Card title="Live Ingested Alerts Log" subtitle="Click any alert row to view automatic Phase 9 triage, detection rules & context enrichment" headerStyle="green">
+
         {isLoading ? (
           <LoadingState message="Loading live security alert stream..." />
         ) : isError ? (
