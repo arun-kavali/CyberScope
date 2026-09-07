@@ -175,6 +175,16 @@ async def get_incident_detail(
         "timeline": timeline_list
     }
 
+from pydantic import BaseModel, Field
+from app.services.investigation import (
+    start_incident_investigation,
+    add_investigation_note,
+    get_incident_intelligence_summary
+)
+
+class NoteCreateSchema(BaseModel):
+    note: str = Field(..., min_length=1, description="Analyst investigation note text")
+
 @router.get("/{incident_id}/timeline", status_code=status.HTTP_200_OK)
 async def get_incident_timeline(
     incident_id: str,
@@ -210,3 +220,86 @@ async def get_incident_timeline(
         }
         for te in timeline_entries
     ]
+
+@router.post("/{incident_id}/start-investigation", status_code=status.HTTP_200_OK)
+async def start_investigation_endpoint(
+    incident_id: str,
+    db: Session = Depends(get_db),
+    current_user: Profile = Depends(require_soc_analyst)
+):
+    """
+    Starts or retrieves active investigation for a specific incident.
+    Transitions incident status from OPEN to IN_PROGRESS.
+    Protected by SOC_ANALYST RBAC.
+    """
+    try:
+        inc_uuid = uuid.UUID(incident_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid incident ID UUID format")
+
+    try:
+        investigation, incident = start_incident_investigation(db, inc_uuid, current_user)
+        return {
+            "status": "success",
+            "message": f"Investigation activated for incident '{incident.incident_number}'.",
+            "investigation": {
+                "id": str(investigation.id),
+                "incident_id": str(incident.id),
+                "incident_number": incident.incident_number,
+                "incident_status": incident.status,
+                "investigation_status": investigation.status,
+                "summary": investigation.summary,
+                "created_at": investigation.created_at.isoformat() if investigation.created_at else None,
+                "updated_at": investigation.updated_at.isoformat() if investigation.updated_at else None
+            }
+        }
+    except ValueError as ve:
+        raise HTTPException(status_code=404, detail=str(ve))
+
+@router.post("/{incident_id}/notes", status_code=status.HTTP_201_CREATED)
+async def add_investigation_note_endpoint(
+    incident_id: str,
+    payload: NoteCreateSchema,
+    db: Session = Depends(get_db),
+    current_user: Profile = Depends(require_soc_analyst)
+):
+    """
+    Adds a timestamped analyst investigation note.
+    Protected by SOC_ANALYST RBAC.
+    """
+    try:
+        inc_uuid = uuid.UUID(incident_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid incident ID UUID format")
+
+    try:
+        new_note, all_notes = add_investigation_note(db, inc_uuid, payload.note, current_user)
+        return {
+            "status": "success",
+            "note": new_note,
+            "notes": all_notes
+        }
+    except ValueError as ve:
+        raise HTTPException(status_code=404 if "not found" in str(ve) else 400, detail=str(ve))
+
+@router.get("/{incident_id}/intelligence", status_code=status.HTTP_200_OK)
+async def get_incident_intelligence_endpoint(
+    incident_id: str,
+    db: Session = Depends(get_db),
+    current_user: Profile = Depends(require_soc_analyst)
+):
+    """
+    Retrieves evidence-grounded investigation summary payload ('What Happened', 'Why Suspicious', 'Potential Impact').
+    Protected by SOC_ANALYST RBAC.
+    """
+    try:
+        inc_uuid = uuid.UUID(incident_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid incident ID UUID format")
+
+    try:
+        summary = get_incident_intelligence_summary(db, inc_uuid)
+        return summary
+    except ValueError as ve:
+        raise HTTPException(status_code=404, detail=str(ve))
+

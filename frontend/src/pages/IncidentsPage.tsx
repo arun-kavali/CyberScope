@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { PageHeader } from '../components/PageHeader';
 import { Card } from '../components/Card';
 import { 
@@ -10,16 +11,19 @@ import {
   Activity, 
   User,
   HardDrive,
-  Filter
+  Filter,
+  Search
 } from 'lucide-react';
 import { 
   fetchIncidents, 
   fetchIncidentById, 
+  startInvestigation,
   IncidentSummaryRecord, 
   IncidentDetailRecord 
 } from '../services/incidentsApi';
 
 export const IncidentsPage: React.FC = () => {
+  const navigate = useNavigate();
   const [incidents, setIncidents] = useState<IncidentSummaryRecord[]>([]);
   const [total, setTotal] = useState<number>(0);
   const [loading, setLoading] = useState<boolean>(true);
@@ -34,6 +38,16 @@ export const IncidentsPage: React.FC = () => {
   const [detailData, setDetailData] = useState<IncidentDetailRecord | null>(null);
   const [detailLoading, setDetailLoading] = useState<boolean>(false);
   const [detailError, setDetailError] = useState<string | null>(null);
+
+  const handleStartInvestigation = async (id: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    try {
+      await startInvestigation(id);
+    } catch (err) {
+      // Proceed even if investigation is already active
+    }
+    navigate(`/investigations?incident_id=${id}`);
+  };
 
   const loadIncidents = async () => {
     try {
@@ -242,16 +256,25 @@ export const IncidentsPage: React.FC = () => {
                       {inc.created_at ? new Date(inc.created_at).toLocaleString() : 'N/A'}
                     </td>
                     <td className="py-3 px-4 text-right">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleSelectIncident(inc.id);
-                        }}
-                        className="inline-flex items-center text-xs text-brand-700 hover:text-brand-900 font-semibold"
-                      >
-                        <span>View</span>
-                        <ChevronRight className="h-4 w-4 ml-0.5" />
-                      </button>
+                      <div className="flex items-center justify-end space-x-2">
+                        <button
+                          onClick={(e) => handleStartInvestigation(inc.id, e)}
+                          className="inline-flex items-center space-x-1 text-xs bg-brand-50 hover:bg-brand-100 text-brand-800 border border-brand-200 px-2.5 py-1 rounded font-semibold transition-colors"
+                        >
+                          <Search className="h-3.5 w-3.5" />
+                          <span>Investigate</span>
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleSelectIncident(inc.id);
+                          }}
+                          className="inline-flex items-center text-xs text-slate-600 hover:text-slate-900 font-semibold px-2 py-1"
+                        >
+                          <span>View</span>
+                          <ChevronRight className="h-4 w-4 ml-0.5" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}

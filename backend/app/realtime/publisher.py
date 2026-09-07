@@ -291,4 +291,73 @@ def publish_incident_updated(incident: Any, alert: Alert) -> None:
         except Exception as e:
             logger.error(f"Error publishing incident updated event outside loop: {e}")
 
+def format_investigation_started_payload(investigation: Any, incident: Any, analyst: Any) -> Dict[str, Any]:
+    analyst_name = getattr(analyst, "full_name", None) or getattr(analyst, "username", None) or getattr(analyst, "email", "SOC Analyst") if hasattr(analyst, "__dict__") else str(analyst)
+    return {
+        "type": "INVESTIGATION_STARTED",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "data": {
+            "investigation_id": str(investigation.id),
+            "incident_id": str(incident.id),
+            "incident_number": incident.incident_number,
+            "status": incident.status,
+            "analyst_name": analyst_name,
+            "started_at": datetime.now(timezone.utc).isoformat()
+        }
+    }
+
+async def publish_investigation_started_async(investigation: Any, incident: Any, analyst: Any) -> None:
+    try:
+        payload = format_investigation_started_payload(investigation, incident, analyst)
+        await manager.broadcast_to_role(payload, "SOC_ANALYST")
+    except Exception as e:
+        logger.error(f"Failed to publish INVESTIGATION_STARTED event: {e}")
+
+def publish_investigation_started(investigation: Any, incident: Any, analyst: Any) -> None:
+    try:
+        loop = asyncio.get_running_loop()
+        if loop.is_running():
+            loop.create_task(publish_investigation_started_async(investigation, incident, analyst))
+        else:
+            asyncio.run(publish_investigation_started_async(investigation, incident, analyst))
+    except RuntimeError:
+        try:
+            asyncio.run(publish_investigation_started_async(investigation, incident, analyst))
+        except Exception as e:
+            logger.error(f"Error publishing investigation started event outside loop: {e}")
+
+def format_investigation_note_added_payload(note: Dict[str, Any], incident: Any, analyst: Any) -> Dict[str, Any]:
+    analyst_name = getattr(analyst, "full_name", None) or getattr(analyst, "username", None) or getattr(analyst, "email", "SOC Analyst") if hasattr(analyst, "__dict__") else str(analyst)
+    return {
+        "type": "INVESTIGATION_NOTE_ADDED",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "data": {
+            "incident_id": str(incident.id),
+            "incident_number": incident.incident_number,
+            "note": note,
+            "analyst_name": analyst_name
+        }
+    }
+
+async def publish_investigation_note_added_async(note: Dict[str, Any], incident: Any, analyst: Any) -> None:
+    try:
+        payload = format_investigation_note_added_payload(note, incident, analyst)
+        await manager.broadcast_to_role(payload, "SOC_ANALYST")
+    except Exception as e:
+        logger.error(f"Failed to publish INVESTIGATION_NOTE_ADDED event: {e}")
+
+def publish_investigation_note_added(note: Dict[str, Any], incident: Any, analyst: Any) -> None:
+    try:
+        loop = asyncio.get_running_loop()
+        if loop.is_running():
+            loop.create_task(publish_investigation_note_added_async(note, incident, analyst))
+        else:
+            asyncio.run(publish_investigation_note_added_async(note, incident, analyst))
+    except RuntimeError:
+        try:
+            asyncio.run(publish_investigation_note_added_async(note, incident, analyst))
+        except Exception as e:
+            logger.error(f"Error publishing investigation note event outside loop: {e}")
+
+
 
