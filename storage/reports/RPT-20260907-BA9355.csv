@@ -1,0 +1,35 @@
+Section,Key,Value
+Metadata,Report Number,RPT-20260907-BA9355
+Metadata,Generated At,2026-09-07T15:29:05.497933+00:00
+Metadata,Dataset Version,v1.0.0
+Metadata,Rule Version,v1.0.0
+Executive Summary,total_alerts,5941
+Executive Summary,critical_alerts,1487
+Executive Summary,high_alerts,3635
+Executive Summary,total_incidents,952
+Executive Summary,open_incidents,952
+Executive Summary,mean_risk_score,39.7
+Executive Summary,status,EVALUATED
+Incident,INC-A409FD,Privilege Escalation Campaign (CRITICAL) - Status: OPEN
+Incident,INC-BA61BE,High Severity Threat Activity Pattern (CRITICAL) - Status: OPEN
+Incident,INC-2026-BAB1,Suspicious Identity Spike (HIGH) - Status: OPEN
+Incident,INC-2026-A61B,Suspicious Identity Spike (HIGH) - Status: OPEN
+Incident,INC-2026-FC75,Suspicious Identity Spike (HIGH) - Status: OPEN
+Incident,INC-2026-0922,Correlated Security Incident — inv_user_7a29e3617504434f955224948aecf3f6 (CRITICAL) - Status: OPEN
+Incident,INC-2026-0921,Correlated Security Incident — inv_user_3892c3a3300e4f6f9debb9cd50213c9d (CRITICAL) - Status: IN_PROGRESS
+Incident,INC-2026-0920,Correlated Security Incident — inv_user_810dfd8393af4fe0bc09a22dce3be14e (CRITICAL) - Status: IN_PROGRESS
+Incident,INC-2026-0919,Correlated Security Incident — inv_user_b123d5275ecd449e8dac77faa3811d63 (CRITICAL) - Status: OPEN
+Incident,INC-2026-0918,Correlated Security Incident — inv_user_8077d84432e242bdb330a7640659025a (CRITICAL) - Status: OPEN
+Execution Gap,MISSING_ESCALATION,HIGH - Potential execution gap: expected escalation evidence was not observed under configured threshold for CRITICAL alert ALT-64156.
+Execution Gap,MISSING_ESCALATION,HIGH - Potential execution gap: expected escalation evidence was not observed under configured threshold for CRITICAL alert ALT-26954.
+Execution Gap,MISSING_ESCALATION,HIGH - Potential execution gap: expected escalation evidence was not observed under configured threshold for CRITICAL alert ALT-24700.
+Execution Gap,MISSING_ESCALATION,HIGH - Potential execution gap: expected escalation evidence was not observed under configured threshold for CRITICAL alert ALT-14595.
+Execution Gap,MISSING_ESCALATION,HIGH - Potential execution gap: expected escalation evidence was not observed under configured threshold for CRITICAL alert ALT-P10-C93D65.
+Execution Gap,MISSING_ESCALATION,HIGH - Potential execution gap: expected escalation evidence was not observed under configured threshold for CRITICAL alert ALT-12650.
+Execution Gap,MISSING_ESCALATION,HIGH - Potential execution gap: expected escalation evidence was not observed under configured threshold for CRITICAL alert ALT-55671.
+Execution Gap,MISSING_ESCALATION,HIGH - Potential execution gap: expected escalation evidence was not observed under configured threshold for CRITICAL alert ALT-54948.
+Execution Gap,MISSING_ESCALATION,HIGH - Potential execution gap: expected escalation evidence was not observed under configured threshold for CRITICAL alert ALT-30147.
+Execution Gap,MISSING_ESCALATION,HIGH - Potential execution gap: expected escalation evidence was not observed under configured threshold for CRITICAL alert ALT-54317.
+Recommendation,Action,Maintain automated correlation rules for credential stuffing and impossible travel
+Recommendation,Action,Review unlinked high-severity alerts flagged by data quality validation
+Recommendation,Action,Enforce mandatory approval policy for ISOLATE_ENDPOINT and DISABLE_USER actions
