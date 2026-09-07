@@ -1,0 +1,357 @@
+{
+  "metadata": {
+    "system_name": "CyberScope SOC Platform",
+    "dataset_version": "v1.0.0",
+    "rule_version": "v1.0.0",
+    "model_version": "ollama-llama3:latest",
+    "prompt_version": "v1.0.0",
+    "generated_at": "2026-09-07T15:13:47.728504+00:00"
+  },
+  "executive_summary": {
+    "total_alerts": 5735,
+    "critical_alerts": 1433,
+    "high_alerts": 3510,
+    "total_incidents": 912,
+    "open_incidents": 912,
+    "mean_risk_score": 39.7,
+    "status": "EVALUATED"
+  },
+  "incidents": [
+    {
+      "incident_number": "INC-3D5D82",
+      "title": "Privilege Escalation Campaign",
+      "severity": "CRITICAL",
+      "status": "OPEN",
+      "created_at": "2026-09-07T20:43:37.418785+05:30"
+    },
+    {
+      "incident_number": "INC-455C2E",
+      "title": "High Severity Threat Activity Pattern",
+      "severity": "CRITICAL",
+      "status": "OPEN",
+      "created_at": "2026-09-07T20:42:58.908371+05:30"
+    },
+    {
+      "incident_number": "INC-2026-AB8E",
+      "title": "Suspicious Identity Spike",
+      "severity": "HIGH",
+      "status": "OPEN",
+      "created_at": "2026-09-07T20:42:44.515247+05:30"
+    },
+    {
+      "incident_number": "INC-2026-B528",
+      "title": "Suspicious Identity Spike",
+      "severity": "HIGH",
+      "status": "OPEN",
+      "created_at": "2026-09-07T20:42:43.453070+05:30"
+    },
+    {
+      "incident_number": "INC-2026-5F37",
+      "title": "Suspicious Identity Spike",
+      "severity": "HIGH",
+      "status": "OPEN",
+      "created_at": "2026-09-07T20:42:43.394432+05:30"
+    },
+    {
+      "incident_number": "INC-2026-0884",
+      "title": "Correlated Security Incident \u2014 inv_user_a53f094474f547d685169412519da9ee",
+      "severity": "CRITICAL",
+      "status": "OPEN",
+      "created_at": "2026-09-07T20:42:42.135502+05:30"
+    },
+    {
+      "incident_number": "INC-2026-0883",
+      "title": "Correlated Security Incident \u2014 inv_user_64847817dba440a9b6b033f390afa724",
+      "severity": "CRITICAL",
+      "status": "IN_PROGRESS",
+      "created_at": "2026-09-07T20:42:41.915035+05:30"
+    },
+    {
+      "incident_number": "INC-2026-0882",
+      "title": "Correlated Security Incident \u2014 inv_user_70ce23864fb64a399140069d26091f8e",
+      "severity": "CRITICAL",
+      "status": "IN_PROGRESS",
+      "created_at": "2026-09-07T20:42:41.743933+05:30"
+    },
+    {
+      "incident_number": "INC-2026-0881",
+      "title": "Correlated Security Incident \u2014 inv_user_ee6b7a50c1734059830a42f72e3e8587",
+      "severity": "CRITICAL",
+      "status": "OPEN",
+      "created_at": "2026-09-07T20:42:41.540123+05:30"
+    },
+    {
+      "incident_number": "INC-2026-0880",
+      "title": "Correlated Security Incident \u2014 inv_user_bdefac5bd74c4de7ae07581376ec179b",
+      "severity": "CRITICAL",
+      "status": "OPEN",
+      "created_at": "2026-09-07T20:42:41.414591+05:30"
+    }
+  ],
+  "detailed_findings": [
+    {
+      "analysis_id": "f29217f9-92f6-454f-a5ab-dbf6be8b0cab",
+      "alert_id": "e4bf42ca-1cac-4cf4-8c63-fca0b4ede36b",
+      "finding_summary": "Automatic Triage COMPLETED. Triggered 0 detection rule(s): [None]. Context: Asset=Unavailable, User=Unavailable.",
+      "confidence_score": 85.0,
+      "false_positive_risk": 15.0,
+      "rule_matches": []
+    },
+    {
+      "analysis_id": "5ebb6be7-1910-4db9-a58a-076eaf1fe1e6",
+      "alert_id": "511a23cc-161b-4702-b9f4-17771f73a020",
+      "finding_summary": "Automatic Triage COMPLETED. Triggered 1 detection rule(s): [RUL-001 (Failed Login Pattern v1.0)]. Context: Asset=Unavailable, User=Unavailable.",
+      "confidence_score": 85.0,
+      "false_positive_risk": 15.0,
+      "rule_matches": []
+    },
+    {
+      "analysis_id": "03f38085-cbdd-4261-86a9-a4ffb4c476eb",
+      "alert_id": "c04c4a21-8e44-4072-b0bc-6bbcbf84c5a4",
+      "finding_summary": "Automatic Triage COMPLETED. Triggered 1 detection rule(s): [RUL-001 (Failed Login Pattern v1.0)]. Context: Asset=Unavailable, User=Unavailable.",
+      "confidence_score": 85.0,
+      "false_positive_risk": 15.0,
+      "rule_matches": []
+    },
+    {
+      "analysis_id": "f9b641e3-be58-4666-a21d-3fcd9cde3204",
+      "alert_id": "4ba85072-3b14-4b87-9999-64c7e6a42e8b",
+      "finding_summary": "Automatic Triage COMPLETED. Triggered 1 detection rule(s): [RUL-005 (Suspicious Process v1.0)]. Context: Asset=Unavailable, User=Unavailable.",
+      "confidence_score": 85.0,
+      "false_positive_risk": 15.0,
+      "rule_matches": []
+    },
+    {
+      "analysis_id": "9388ad5c-8dd3-4146-9c80-7056d2dbc707",
+      "alert_id": "73df8297-5b04-46f3-9761-7e055aa95640",
+      "finding_summary": "Automatic Triage COMPLETED. Triggered 0 detection rule(s): [None]. Context: Asset=Unavailable, User=Unavailable.",
+      "confidence_score": 85.0,
+      "false_positive_risk": 15.0,
+      "rule_matches": []
+    },
+    {
+      "analysis_id": "edff6ee3-4654-4c58-91a8-ef4e1bb4ab0f",
+      "alert_id": "0d5532db-8c6d-4075-aecf-cc1b1ae0fec3",
+      "finding_summary": "Automatic Triage COMPLETED. Triggered 0 detection rule(s): [None]. Context: Asset=Unavailable, User=Unavailable.",
+      "confidence_score": 85.0,
+      "false_positive_risk": 15.0,
+      "rule_matches": []
+    },
+    {
+      "analysis_id": "caaf4fe7-eea2-4774-b149-8c2e74384251",
+      "alert_id": "46b7385e-97f8-435f-a0b6-e77c7e0f0987",
+      "finding_summary": "Automatic Triage COMPLETED. Triggered 1 detection rule(s): [RUL-001 (Failed Login Pattern v1.0)]. Context: Asset=Unavailable, User=Unavailable.",
+      "confidence_score": 85.0,
+      "false_positive_risk": 15.0,
+      "rule_matches": []
+    },
+    {
+      "analysis_id": "066dbd29-4172-4429-ba6d-f91a120ec07c",
+      "alert_id": "292002e2-f9bf-4f46-a89f-3370ddb4d384",
+      "finding_summary": "Automatic Triage COMPLETED. Triggered 0 detection rule(s): [None]. Context: Asset=Unavailable, User=Unavailable.",
+      "confidence_score": 85.0,
+      "false_positive_risk": 15.0,
+      "rule_matches": []
+    },
+    {
+      "analysis_id": "ffa429ae-e3c0-4af6-a028-1c016289a7f1",
+      "alert_id": "68ee1831-e18f-4125-8799-c1b6d8945c9e",
+      "finding_summary": "Automatic Triage COMPLETED. Triggered 0 detection rule(s): [None]. Context: Asset=Unavailable, User=Unavailable.",
+      "confidence_score": 85.0,
+      "false_positive_risk": 15.0,
+      "rule_matches": []
+    },
+    {
+      "analysis_id": "23a7503c-6fc6-4e7e-bb86-a0cb849cd20e",
+      "alert_id": "29a3d14e-c8c0-4296-a8ff-2156f389747d",
+      "finding_summary": "Automatic Triage COMPLETED. Triggered 0 detection rule(s): [None]. Context: Asset=Unavailable, User=Unavailable.",
+      "confidence_score": 85.0,
+      "false_positive_risk": 15.0,
+      "rule_matches": []
+    }
+  ],
+  "execution_gaps": [
+    {
+      "finding_type": "MISSING_ESCALATION",
+      "severity": "HIGH",
+      "reason": "Potential execution gap: expected escalation evidence was not observed under configured threshold for CRITICAL alert ALT-64156."
+    },
+    {
+      "finding_type": "MISSING_ESCALATION",
+      "severity": "HIGH",
+      "reason": "Potential execution gap: expected escalation evidence was not observed under configured threshold for CRITICAL alert ALT-26954."
+    },
+    {
+      "finding_type": "MISSING_ESCALATION",
+      "severity": "HIGH",
+      "reason": "Potential execution gap: expected escalation evidence was not observed under configured threshold for CRITICAL alert ALT-24700."
+    },
+    {
+      "finding_type": "MISSING_ESCALATION",
+      "severity": "HIGH",
+      "reason": "Potential execution gap: expected escalation evidence was not observed under configured threshold for CRITICAL alert ALT-14595."
+    },
+    {
+      "finding_type": "MISSING_ESCALATION",
+      "severity": "HIGH",
+      "reason": "Potential execution gap: expected escalation evidence was not observed under configured threshold for CRITICAL alert ALT-P10-C93D65."
+    },
+    {
+      "finding_type": "MISSING_ESCALATION",
+      "severity": "HIGH",
+      "reason": "Potential execution gap: expected escalation evidence was not observed under configured threshold for CRITICAL alert ALT-12650."
+    },
+    {
+      "finding_type": "MISSING_ESCALATION",
+      "severity": "HIGH",
+      "reason": "Potential execution gap: expected escalation evidence was not observed under configured threshold for CRITICAL alert ALT-55671."
+    },
+    {
+      "finding_type": "MISSING_ESCALATION",
+      "severity": "HIGH",
+      "reason": "Potential execution gap: expected escalation evidence was not observed under configured threshold for CRITICAL alert ALT-54948."
+    },
+    {
+      "finding_type": "MISSING_ESCALATION",
+      "severity": "HIGH",
+      "reason": "Potential execution gap: expected escalation evidence was not observed under configured threshold for CRITICAL alert ALT-30147."
+    },
+    {
+      "finding_type": "MISSING_ESCALATION",
+      "severity": "HIGH",
+      "reason": "Potential execution gap: expected escalation evidence was not observed under configured threshold for CRITICAL alert ALT-54317."
+    }
+  ],
+  "negative_space_findings": [
+    {
+      "expected_activity": "Expected baseline security event telemetry for critical asset 'Critical-Database-Server-999' (CRITICAL)",
+      "observed_activity": "Observed 0 alert events over active monitoring window.",
+      "potential_indicator": "Potential indicator: expected activity was not observed for critical asset. Telemetry sensor coverage may require review."
+    }
+  ],
+  "peer_deviations": [
+    {
+      "peer_group": "Top Decile Enterprise SOC",
+      "metric_name": "Mean Time to Triage (MTTT)",
+      "normalized_metric": 1.2
+    },
+    {
+      "peer_group": "Top Decile Enterprise SOC",
+      "metric_name": "Rule Precision",
+      "normalized_metric": 98.4
+    },
+    {
+      "peer_group": "Enterprise SOC Peer Group",
+      "metric_name": "Incident Closure Rate",
+      "normalized_metric": 0.0
+    },
+    {
+      "peer_group": "Enterprise SOC Peer Group",
+      "metric_name": "Alert Volume (Daily Mean)",
+      "normalized_metric": 191.1
+    },
+    {
+      "peer_group": "Enterprise SOC Peer Group",
+      "metric_name": "Critical Alert Ratio",
+      "normalized_metric": 86.19
+    },
+    {
+      "peer_group": "Enterprise SOC Peer Group",
+      "metric_name": "Median Investigation Duration",
+      "normalized_metric": 0.0
+    },
+    {
+      "peer_group": "Enterprise SOC Peer Group",
+      "metric_name": "Monitoring Sensor Coverage Ratio",
+      "normalized_metric": 100.0
+    },
+    {
+      "peer_group": "Enterprise SOC Peer Group",
+      "metric_name": "Escalation Rate",
+      "normalized_metric": 0.0
+    },
+    {
+      "peer_group": "Enterprise SOC Peer Group",
+      "metric_name": "Repeated Alerts Ratio",
+      "normalized_metric": 81.04
+    },
+    {
+      "peer_group": "Enterprise SOC Peer Group",
+      "metric_name": "Evidence Payload Completeness Ratio",
+      "normalized_metric": 81.09
+    }
+  ],
+  "data_quality": {
+    "quality_score": 0.0,
+    "total_issues": 489,
+    "critical_issues": 0,
+    "high_issues": 1
+  },
+  "recent_audits": [
+    {
+      "action": "REPORT_GENERATED",
+      "target_type": "Report",
+      "target_id": "f9759f3a-93c1-4477-9733-32047708b80b",
+      "timestamp": "2026-09-07T20:43:47.716190+05:30"
+    },
+    {
+      "action": "REPORT_GENERATED",
+      "target_type": "Report",
+      "target_id": "db57cbee-a49a-46ae-844c-14f38c95476a",
+      "timestamp": "2026-09-07T20:43:47.663613+05:30"
+    },
+    {
+      "action": "TEST_SECRET_ACTION",
+      "target_type": null,
+      "target_id": null,
+      "timestamp": "2026-09-07T20:43:46.534965+05:30"
+    },
+    {
+      "action": "RESPONSE_ACTION_APPROVED_AND_EXECUTED",
+      "target_type": "ALERT",
+      "target_id": "ALT-TEST-999",
+      "timestamp": "2026-09-07T20:43:46.042183+05:30"
+    },
+    {
+      "action": "RESPONSE_ACTION_REQUESTED",
+      "target_type": "ALERT",
+      "target_id": "ALT-TEST-999",
+      "timestamp": "2026-09-07T20:43:46.027170+05:30"
+    },
+    {
+      "action": "RESPONSE_ACTION_REJECTED",
+      "target_type": "USER",
+      "target_id": "USR-4821",
+      "timestamp": "2026-09-07T20:43:45.570654+05:30"
+    },
+    {
+      "action": "RESPONSE_ACTION_REQUESTED",
+      "target_type": "USER",
+      "target_id": "USR-4821",
+      "timestamp": "2026-09-07T20:43:45.555603+05:30"
+    },
+    {
+      "action": "RESPONSE_ACTION_ROLLED_BACK",
+      "target_type": "ENDPOINT",
+      "target_id": "EP-0017",
+      "timestamp": "2026-09-07T20:43:45.064116+05:30"
+    },
+    {
+      "action": "RESPONSE_ACTION_APPROVED_AND_EXECUTED",
+      "target_type": "ENDPOINT",
+      "target_id": "EP-0017",
+      "timestamp": "2026-09-07T20:43:45.049795+05:30"
+    },
+    {
+      "action": "RESPONSE_ACTION_REQUESTED",
+      "target_type": "ENDPOINT",
+      "target_id": "EP-0017",
+      "timestamp": "2026-09-07T20:43:45.027471+05:30"
+    }
+  ],
+  "recommendations": [
+    "Maintain automated correlation rules for credential stuffing and impossible travel",
+    "Review unlinked high-severity alerts flagged by data quality validation",
+    "Enforce mandatory approval policy for ISOLATE_ENDPOINT and DISABLE_USER actions"
+  ]
+}

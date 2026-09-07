@@ -24,6 +24,10 @@ def sanitize_audit_metadata(data: Optional[Dict[str, Any]]) -> Optional[Dict[str
 
 class AuditService:
     @staticmethod
+    def sanitize_dict(data: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+        return sanitize_audit_metadata(data)
+
+    @staticmethod
     def log_event(
         db: Session,
         action: str,

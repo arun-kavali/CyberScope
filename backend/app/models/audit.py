@@ -48,3 +48,11 @@ class Report(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utc_now, index=True, nullable=False
     )
+
+    @property
+    def format(self) -> str:
+        if self.content_summary and isinstance(self.content_summary, dict) and "format" in self.content_summary:
+            return str(self.content_summary["format"]).upper()
+        if self.file_path:
+            return self.file_path.split(".")[-1].upper()
+        return "PDF"

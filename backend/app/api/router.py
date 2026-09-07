@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from app.api import health, test, auth, alerts, analysis, incidents, sources, analytics, response, reports, audit, ws, ai, dashboard
+from app.api import health, test, auth, alerts, analysis, incidents, sources, analytics, response, reports, audit, ws, ai, dashboard, data_quality
 
 api_router = APIRouter()
 
@@ -20,3 +20,5 @@ api_router.include_router(analytics.router)
 api_router.include_router(response.router)
 api_router.include_router(reports.router)
 api_router.include_router(audit.router)
+api_router.include_router(data_quality.router)
+
