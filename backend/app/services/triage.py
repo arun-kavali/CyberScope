@@ -100,6 +100,13 @@ def execute_alert_triage(db: Session, alert: Alert) -> AlertAnalysis:
         except Exception as ae:
             logger.error(f"Failed to evaluate anomaly scores for alert '{alert.alert_code}': {ae}")
 
+        # 7. Phase 12: Correlation Engine and Incident Creation
+        try:
+            from app.services.correlation import evaluate_alert_correlation
+            evaluate_alert_correlation(db, alert, analysis)
+        except Exception as ce:
+            logger.error(f"Failed to evaluate correlation for alert '{alert.alert_code}': {ce}")
+
         return analysis
 
     except Exception as e:

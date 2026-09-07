@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.api.router import api_router
-from app.api import auth, alerts, ws
+from app.api import auth, alerts, ws, analysis, incidents
 from app.db.session import SessionLocal
 from app.auth.service import seed_default_users
 
@@ -64,6 +64,8 @@ async def root_health_check():
 app.include_router(auth.router)
 app.include_router(alerts.router)
 app.include_router(ws.router)
+app.include_router(analysis.router)
+app.include_router(incidents.router)
 
 # Include API v1 routes (/api/v1/...)
 app.include_router(api_router, prefix=settings.API_V1_STR)

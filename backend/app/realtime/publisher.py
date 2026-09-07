@@ -180,3 +180,115 @@ def publish_anomaly_completed(anomaly_score: Any, alert: Alert) -> None:
         except Exception as e:
             logger.error(f"Error publishing anomaly event outside loop: {e}")
 
+def format_correlation_completed_payload(correlation_result: Any, alert: Alert) -> Dict[str, Any]:
+    data_dict = correlation_result.correlated_alert_ids or {}
+    return {
+        "type": "CORRELATION_COMPLETED",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "data": {
+            "correlation_id": str(correlation_result.id),
+            "alert_id": str(alert.id),
+            "alert_code": alert.alert_code,
+            "correlation_score": float(correlation_result.score),
+            "correlated_alert_count": len(data_dict.get("correlated_alert_ids", [])),
+            "explanation": correlation_result.description,
+            "created_at": correlation_result.created_at.isoformat() if isinstance(correlation_result.created_at, datetime) else str(correlation_result.created_at)
+        }
+    }
+
+async def publish_correlation_completed_async(correlation_result: Any, alert: Alert) -> None:
+    try:
+        payload = format_correlation_completed_payload(correlation_result, alert)
+        await manager.broadcast_to_role(payload, "SOC_ANALYST")
+    except Exception as e:
+        logger.error(f"Failed to publish CORRELATION_COMPLETED event: {e}")
+
+def publish_correlation_completed(correlation_result: Any, alert: Alert) -> None:
+    try:
+        loop = asyncio.get_running_loop()
+        if loop.is_running():
+            loop.create_task(publish_correlation_completed_async(correlation_result, alert))
+        else:
+            asyncio.run(publish_correlation_completed_async(correlation_result, alert))
+    except RuntimeError:
+        try:
+            asyncio.run(publish_correlation_completed_async(correlation_result, alert))
+        except Exception as e:
+            logger.error(f"Error publishing correlation event outside loop: {e}")
+
+def format_incident_created_payload(incident: Any, alert: Alert) -> Dict[str, Any]:
+    return {
+        "type": "INCIDENT_CREATED",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "data": {
+            "incident_id": str(incident.id),
+            "incident_number": incident.incident_number,
+            "title": incident.title,
+            "severity": incident.severity,
+            "risk_score": float(incident.risk_score),
+            "confidence_score": float(incident.confidence_score),
+            "status": incident.status,
+            "trigger_alert_id": str(alert.id),
+            "trigger_alert_code": alert.alert_code,
+            "created_at": incident.created_at.isoformat() if isinstance(incident.created_at, datetime) else str(incident.created_at)
+        }
+    }
+
+async def publish_incident_created_async(incident: Any, alert: Alert) -> None:
+    try:
+        payload = format_incident_created_payload(incident, alert)
+        await manager.broadcast_to_role(payload, "SOC_ANALYST")
+    except Exception as e:
+        logger.error(f"Failed to publish INCIDENT_CREATED event: {e}")
+
+def publish_incident_created(incident: Any, alert: Alert) -> None:
+    try:
+        loop = asyncio.get_running_loop()
+        if loop.is_running():
+            loop.create_task(publish_incident_created_async(incident, alert))
+        else:
+            asyncio.run(publish_incident_created_async(incident, alert))
+    except RuntimeError:
+        try:
+            asyncio.run(publish_incident_created_async(incident, alert))
+        except Exception as e:
+            logger.error(f"Error publishing incident created event outside loop: {e}")
+
+def format_incident_updated_payload(incident: Any, alert: Alert) -> Dict[str, Any]:
+    return {
+        "type": "INCIDENT_UPDATED",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "data": {
+            "incident_id": str(incident.id),
+            "incident_number": incident.incident_number,
+            "severity": incident.severity,
+            "risk_score": float(incident.risk_score),
+            "confidence_score": float(incident.confidence_score),
+            "status": incident.status,
+            "added_alert_id": str(alert.id),
+            "added_alert_code": alert.alert_code,
+            "updated_at": incident.updated_at.isoformat() if isinstance(incident.updated_at, datetime) else str(incident.updated_at)
+        }
+    }
+
+async def publish_incident_updated_async(incident: Any, alert: Alert) -> None:
+    try:
+        payload = format_incident_updated_payload(incident, alert)
+        await manager.broadcast_to_role(payload, "SOC_ANALYST")
+    except Exception as e:
+        logger.error(f"Failed to publish INCIDENT_UPDATED event: {e}")
+
+def publish_incident_updated(incident: Any, alert: Alert) -> None:
+    try:
+        loop = asyncio.get_running_loop()
+        if loop.is_running():
+            loop.create_task(publish_incident_updated_async(incident, alert))
+        else:
+            asyncio.run(publish_incident_updated_async(incident, alert))
+    except RuntimeError:
+        try:
+            asyncio.run(publish_incident_updated_async(incident, alert))
+        except Exception as e:
+            logger.error(f"Error publishing incident updated event outside loop: {e}")
+
+
