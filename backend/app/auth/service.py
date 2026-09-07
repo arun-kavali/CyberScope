@@ -63,6 +63,18 @@ def seed_default_users(db: Session) -> None:
             )
             db.add(alert_source_user)
 
+        # Seed Default Alert Source Entity
+        from app.models.sources import AlertSource
+        default_source = db.scalar(select(AlertSource).where(AlertSource.name == "Synthetic Scenario Generator"))
+        if not default_source:
+            default_source = AlertSource(
+                name="Synthetic Scenario Generator",
+                source_type="SYNTHETIC",
+                status="ACTIVE",
+                source_metadata={"description": "Built-in synthetic alert generator source"}
+            )
+            db.add(default_source)
+
         db.commit()
     except Exception as e:
         db.rollback()
