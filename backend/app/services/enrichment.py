@@ -75,13 +75,19 @@ def enrich_alert_context(db: Session, alert: Alert) -> Dict[str, Any]:
             user_obj = db.scalar(stmt)
 
         if user_obj:
+            is_priv = any(kw in (user_obj.name or "").lower() for kw in ["admin", "root", "sec"]) or \
+                      any(kw in (user_obj.user_id_code or "").lower() for kw in ["admin", "root"]) or \
+                      any(kw in (user_obj.email or "").lower() for kw in ["admin", "root", "sec"]) or \
+                      (user_obj.department or "") in ["IT Security", "IT Administration", "Executive"]
             enrichment["user"] = {
                 "context_available": True,
                 "user_id": str(user_obj.id),
                 "user_code": user_obj.user_id_code,
                 "name": user_obj.name,
                 "email": user_obj.email,
+                "username": user_obj.user_id_code or user_obj.name,
                 "department": user_obj.department,
+                "is_privileged": is_priv,
                 "status": user_obj.status
             }
         else:

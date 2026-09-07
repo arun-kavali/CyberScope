@@ -105,3 +105,41 @@ def publish_analysis_completed(analysis: Any, alert: Alert) -> None:
             asyncio.run(publish_analysis_completed_async(analysis, alert))
         except Exception as e:
             logger.error(f"Error publishing analysis event outside loop: {e}")
+
+def format_scores_completed_payload(risk_score: Any, alert: Alert) -> Dict[str, Any]:
+    return {
+        "type": "SCORES_COMPLETED",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "data": {
+            "risk_score_id": str(risk_score.id),
+            "alert_id": str(alert.id),
+            "alert_code": alert.alert_code,
+            "risk_score": float(risk_score.score),
+            "confidence": float(risk_score.confidence),
+            "false_positive_likelihood": float(risk_score.false_positive_likelihood),
+            "version": risk_score.version,
+            "status": "COMPLETED",
+            "timestamp": risk_score.timestamp.isoformat() if isinstance(risk_record_ts := getattr(risk_score, "timestamp", None), datetime) else str(risk_record_ts)
+        }
+    }
+
+async def publish_scores_completed_async(risk_score: Any, alert: Alert) -> None:
+    try:
+        payload = format_scores_completed_payload(risk_score, alert)
+        await manager.broadcast_to_role(payload, "SOC_ANALYST")
+    except Exception as e:
+        logger.error(f"Failed to publish SCORES_COMPLETED event: {e}")
+
+def publish_scores_completed(risk_score: Any, alert: Alert) -> None:
+    try:
+        loop = asyncio.get_running_loop()
+        if loop.is_running():
+            loop.create_task(publish_scores_completed_async(risk_score, alert))
+        else:
+            asyncio.run(publish_scores_completed_async(risk_score, alert))
+    except RuntimeError:
+        try:
+            asyncio.run(publish_scores_completed_async(risk_score, alert))
+        except Exception as e:
+            logger.error(f"Error publishing scores event outside loop: {e}")
+

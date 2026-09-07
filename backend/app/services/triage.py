@@ -86,6 +86,13 @@ def execute_alert_triage(db: Session, alert: Alert) -> AlertAnalysis:
         except Exception as pe:
             logger.warning(f"Failed to publish ANALYSIS_COMPLETED event: {pe}")
 
+        # 5. Phase 10: Risk, Confidence, and False-Positive Likelihood Scoring
+        try:
+            from app.services.risk import evaluate_and_persist_risk_scores
+            evaluate_and_persist_risk_scores(db, alert, analysis)
+        except Exception as se:
+            logger.error(f"Failed to evaluate risk scores for alert '{alert.alert_code}': {se}")
+
         return analysis
 
     except Exception as e:

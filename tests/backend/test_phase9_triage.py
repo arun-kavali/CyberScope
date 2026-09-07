@@ -463,7 +463,7 @@ def test_alert_source_cannot_access_analyst_analysis():
     assert res.status_code == 403
 
 
-def test_phase10_scores_absent():
+def test_phase10_scores_present():
     analyst_token, source_token = get_tokens()
     res = client.post(
         "/alerts",
@@ -471,16 +471,17 @@ def test_phase10_scores_absent():
             "event_type": "Brute Force",
             "event_category": "AUTHENTICATION",
             "severity": "HIGH",
-            "description": "Phase 10 score absence test"
+            "description": "Phase 10 score presence test"
         },
         headers={"Authorization": f"Bearer {source_token}"}
     )
     alert_id = res.json()["id"]
     analysis = client.get(f"/alerts/{alert_id}/analysis", headers={"Authorization": f"Bearer {analyst_token}"}).json()
     findings = analysis["findings"]
-    assert "risk_score" not in findings
-    assert "confidence_score" not in findings
-    assert "false_positive_likelihood" not in findings
+    assert "risk_score" in findings
+    assert "score" in findings["risk_score"]
+    assert "confidence" in findings["risk_score"]
+    assert "false_positive_likelihood" in findings["risk_score"]
 
 
 def test_realtime_analysis_completed_event():

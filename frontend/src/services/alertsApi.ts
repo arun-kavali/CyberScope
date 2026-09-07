@@ -186,6 +186,29 @@ export interface TriggeredRule {
   evidence: Record<string, any>;
 }
 
+export interface ScoreContributor {
+  name: string;
+  category: string;
+  weight: number;
+  observed: any;
+  reason: string;
+  source?: string;
+}
+
+export interface RiskScoreData {
+  score: number;
+  confidence: number;
+  false_positive_likelihood: number;
+  version: string;
+  disclaimer: string;
+  contributors?: {
+    risk_contributors?: ScoreContributor[];
+    confidence_contributors?: ScoreContributor[];
+    fp_contributors?: ScoreContributor[];
+    score_disclaimer?: string;
+  };
+}
+
 export interface AlertAnalysisRecord {
   id: string;
   alert_id: string;
@@ -196,6 +219,8 @@ export interface AlertAnalysisRecord {
     triggered_rules?: TriggeredRule[];
     threat_indicator_match?: Record<string, any>;
     triage_priority_input?: string;
+    risk_score_id?: string;
+    risk_score?: RiskScoreData;
   };
   analysis_metadata?: {
     triage_version?: string;

@@ -14,9 +14,10 @@ import {
   reanalyzeAlertApi,
   AlertRecord,
   AlertAnalysisRecord,
-  TriggeredRule
+  TriggeredRule,
+  ScoreContributor
 } from '../services/alertsApi';
-import { Radio, RefreshCw, Filter, User, Server, ChevronRight, X, ShieldAlert, Cpu, Clock, Play } from 'lucide-react';
+import { Radio, RefreshCw, Filter, User, Server, ChevronRight, X, ShieldAlert, Cpu, Clock, Play, ChevronDown, ChevronUp, Info } from 'lucide-react';
 
 export const AlertsPage: React.FC = () => {
   const { token } = useAuth();
@@ -25,6 +26,16 @@ export const AlertsPage: React.FC = () => {
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
   const [selectedSeverity, setSelectedSeverity] = useState<string>('ALL');
   const [activeAlert, setActiveAlert] = useState<AlertRecord | null>(null);
+  const [showContributors, setShowContributors] = useState<boolean>(false);
+  const [activeScoreTab, setActiveScoreTab] = useState<'risk' | 'confidence' | 'fp'>('risk');
+
+  const getRiskRating = (score: number) => {
+    if (score >= 90) return { label: 'CRITICAL', badge: 'bg-purple-100 text-purple-800 border-purple-300', bar: 'bg-purple-600' };
+    if (score >= 75) return { label: 'VERY HIGH', badge: 'bg-rose-100 text-rose-800 border-rose-300', bar: 'bg-rose-600' };
+    if (score >= 50) return { label: 'HIGH', badge: 'bg-orange-100 text-orange-800 border-orange-300', bar: 'bg-orange-500' };
+    if (score >= 25) return { label: 'MODERATE', badge: 'bg-amber-100 text-amber-800 border-amber-300', bar: 'bg-amber-500' };
+    return { label: 'LOW', badge: 'bg-emerald-100 text-emerald-800 border-emerald-300', bar: 'bg-emerald-500' };
+  };
 
   const { data: alerts, isLoading, isError, error, refetch, isRefetching } = useQuery({
     queryKey: ['alerts', selectedCategory, selectedSeverity],
@@ -53,8 +64,8 @@ export const AlertsPage: React.FC = () => {
   // Mutation to trigger manual reanalysis
   const reanalyzeMutation = useMutation({
     mutationFn: (alertId: string) => reanalyzeAlertApi(token || '', alertId),
-    onSuccess: (data) => {
-      queryClient.setQueryData(['alert-analysis', activeAlert?.id], data);
+    onSuccess: (updatedAnalysis) => {
+      queryClient.setQueryData(['alert-analysis', activeAlert?.id], updatedAnalysis);
       queryClient.invalidateQueries({ queryKey: ['alerts'] });
     },
   });
@@ -291,6 +302,206 @@ export const AlertsPage: React.FC = () => {
                     </div>
                     <p className="text-slate-700 leading-relaxed text-xs">{analysisData.summary}</p>
                   </div>
+
+                  {/* Phase 10 Intelligence Metrics Section */}
+                  {analysisData.findings?.risk_score && (
+                    <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-4 shadow-sm">
+                      <div className="flex items-center justify-between border-b border-slate-200 pb-2">
+                        <span className="font-bold text-slate-900 text-xs tracking-wide uppercase flex items-center space-x-1.5">
+                          <Cpu className="h-4 w-4 text-brand-700" />
+                          <span>Phase 10 Intelligence Metrics</span>
+                        </span>
+                        <span className="text-[10px] font-mono text-slate-500">
+                          Engine v{analysisData.findings.risk_score.version || '1.0'}
+                        </span>
+                      </div>
+
+                      {/* 3 Metric Cards Grid */}
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        {/* 1. Risk Score Card */}
+                        {(() => {
+                          const rScore = analysisData.findings.risk_score.score ?? 0;
+                          const rating = getRiskRating(rScore);
+                          return (
+                            <div className="bg-white border border-slate-200 rounded-lg p-3 space-y-2 flex flex-col justify-between">
+                              <div>
+                                <div className="flex items-center justify-between text-[11px] text-slate-500 font-medium">
+                                  <span>Risk Score</span>
+                                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${rating.badge}`}>
+                                    {rating.label}
+                                  </span>
+                                </div>
+                                <div className="text-xl font-extrabold text-slate-900 font-mono mt-1">
+                                  {rScore.toFixed(0)} <span className="text-xs text-slate-400 font-normal">/ 100</span>
+                                </div>
+                              </div>
+                              <div className="space-y-1">
+                                <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
+                                  <div className={`h-full ${rating.bar}`} style={{ width: `${rScore}%` }}></div>
+                                </div>
+                                <div className="text-[10px] text-slate-500 leading-tight">
+                                  Prioritization signal only.
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })()}
+
+                        {/* 2. Confidence Score Card */}
+                        {(() => {
+                          const cScore = analysisData.findings.risk_score.confidence ?? 0;
+                          return (
+                            <div className="bg-white border border-slate-200 rounded-lg p-3 space-y-2 flex flex-col justify-between">
+                              <div>
+                                <div className="flex items-center justify-between text-[11px] text-slate-500 font-medium">
+                                  <span>Confidence</span>
+                                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-50 text-blue-800 border border-blue-200">
+                                    {cScore >= 80 ? 'HIGH EVIDENCE' : cScore >= 50 ? 'MODERATE' : 'LIMITED'}
+                                  </span>
+                                </div>
+                                <div className="text-xl font-extrabold text-slate-900 font-mono mt-1">
+                                  {cScore.toFixed(0)}%
+                                </div>
+                              </div>
+                              <div className="space-y-1">
+                                <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
+                                  <div className="h-full bg-blue-600" style={{ width: `${cScore}%` }}></div>
+                                </div>
+                                <div className="text-[10px] text-slate-500 leading-tight">
+                                  Evidence strength & completeness.
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })()}
+
+                        {/* 3. Estimated False-Positive Likelihood Card */}
+                        {(() => {
+                          const fpScore = analysisData.findings.risk_score.false_positive_likelihood ?? 0;
+                          return (
+                            <div className="bg-white border border-slate-200 rounded-lg p-3 space-y-2 flex flex-col justify-between">
+                              <div>
+                                <div className="flex items-center justify-between text-[11px] text-slate-500 font-medium">
+                                  <span>Estimated FP Likelihood</span>
+                                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200">
+                                    {fpScore >= 50 ? 'ELEVATED FP' : 'LOW FP'}
+                                  </span>
+                                </div>
+                                <div className="text-xl font-extrabold text-slate-900 font-mono mt-1">
+                                  {fpScore.toFixed(0)}%
+                                </div>
+                              </div>
+                              <div className="space-y-1">
+                                <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
+                                  <div className="h-full bg-slate-600" style={{ width: `${fpScore}%` }}></div>
+                                </div>
+                                <div className="text-[10px] text-slate-500 leading-tight">
+                                  Estimated chance of benign activity.
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })()}
+                      </div>
+
+                      {/* Explicit Risk Disclaimer Alert */}
+                      <div className="bg-amber-50/70 border border-amber-200 rounded-lg p-2.5 flex items-start space-x-2 text-[11px] text-amber-900">
+                        <Info className="h-4 w-4 text-amber-700 shrink-0 mt-0.5" />
+                        <div>
+                          <span className="font-bold">Analytical Guarantee: </span>
+                          {analysisData.findings.risk_score.disclaimer}
+                        </div>
+                      </div>
+
+                      {/* Contributor Evidence Breakdown Collapsable Section */}
+                      <div className="border-t border-slate-200 pt-3">
+                        <button
+                          onClick={() => setShowContributors(!showContributors)}
+                          className="w-full flex items-center justify-between text-xs font-bold text-slate-800 hover:text-brand-700 transition-colors py-1"
+                        >
+                          <span className="flex items-center space-x-1.5">
+                            <Clock className="h-3.5 w-3.5 text-brand-600" />
+                            <span>Score Contributor Evidence Breakdown</span>
+                          </span>
+                          {showContributors ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                        </button>
+
+                        {showContributors && (
+                          <div className="mt-3 space-y-3">
+                            {/* Score Tabs */}
+                            <div className="flex border-b border-slate-200 font-medium text-xs">
+                              <button
+                                onClick={() => setActiveScoreTab('risk')}
+                                className={`pb-2 px-3 border-b-2 font-bold ${
+                                  activeScoreTab === 'risk'
+                                    ? 'border-brand-600 text-brand-900'
+                                    : 'border-transparent text-slate-500 hover:text-slate-700'
+                                }`}
+                              >
+                                Risk Contributors ({analysisData.findings.risk_score.contributors?.risk_contributors?.length || 0})
+                              </button>
+                              <button
+                                onClick={() => setActiveScoreTab('confidence')}
+                                className={`pb-2 px-3 border-b-2 font-bold ${
+                                  activeScoreTab === 'confidence'
+                                    ? 'border-blue-600 text-blue-900'
+                                    : 'border-transparent text-slate-500 hover:text-slate-700'
+                                }`}
+                              >
+                                Confidence Contributors ({analysisData.findings.risk_score.contributors?.confidence_contributors?.length || 0})
+                              </button>
+                              <button
+                                onClick={() => setActiveScoreTab('fp')}
+                                className={`pb-2 px-3 border-b-2 font-bold ${
+                                  activeScoreTab === 'fp'
+                                    ? 'border-slate-700 text-slate-900'
+                                    : 'border-transparent text-slate-500 hover:text-slate-700'
+                                }`}
+                              >
+                                FP Contributors ({analysisData.findings.risk_score.contributors?.fp_contributors?.length || 0})
+                              </button>
+                            </div>
+
+                            {/* Contributor List */}
+                            <div className="space-y-2">
+                              {(() => {
+                                const list: ScoreContributor[] =
+                                  activeScoreTab === 'risk'
+                                    ? analysisData.findings.risk_score.contributors?.risk_contributors || []
+                                    : activeScoreTab === 'confidence'
+                                    ? analysisData.findings.risk_score.contributors?.confidence_contributors || []
+                                    : analysisData.findings.risk_score.contributors?.fp_contributors || [];
+
+                                if (!list || list.length === 0) {
+                                  return (
+                                    <div className="text-slate-400 text-xs italic py-2">
+                                      No contributors documented for this score category.
+                                    </div>
+                                  );
+                                }
+
+                                return list.map((c, i) => (
+                                  <div key={i} className="bg-white border border-slate-200 rounded p-2.5 text-[11px] space-y-1">
+                                    <div className="flex items-center justify-between font-bold">
+                                      <span className="text-slate-900 font-mono">{c.name}</span>
+                                      <span className="bg-brand-50 text-brand-800 border border-brand-200 px-1.5 py-0.2 rounded">
+                                        +{c.weight} pts
+                                      </span>
+                                    </div>
+                                    <p className="text-slate-700">{c.reason}</p>
+                                    <div className="flex items-center justify-between text-[10px] text-slate-400 font-mono pt-1">
+                                      <span>Observed: {String(c.observed)}</span>
+                                      <span>Source: {c.source || 'Engine'}</span>
+                                    </div>
+                                  </div>
+                                ));
+                              })()}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
 
                   {/* Triggered Detection Rules */}
                   <div className="space-y-3">
