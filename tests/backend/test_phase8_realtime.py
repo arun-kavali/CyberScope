@@ -187,7 +187,7 @@ def test_batch_accepted_alerts_generate_individual_events():
         assert batch_res.status_code == 201
         assert batch_res.json()["accepted_count"] == 2
 
-        events = [websocket.receive_json() for _ in range(4)]
+        events = [websocket.receive_json() for _ in range(8)]
         created_events = [e for e in events if e["type"] == "ALERT_CREATED"]
         assert len(created_events) == 2
 

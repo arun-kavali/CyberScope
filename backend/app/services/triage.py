@@ -93,6 +93,13 @@ def execute_alert_triage(db: Session, alert: Alert) -> AlertAnalysis:
         except Exception as se:
             logger.error(f"Failed to evaluate risk scores for alert '{alert.alert_code}': {se}")
 
+        # 6. Phase 11: ML and Statistical Anomaly Analysis
+        try:
+            from app.services.anomaly import evaluate_and_persist_anomaly
+            evaluate_and_persist_anomaly(db, alert, analysis)
+        except Exception as ae:
+            logger.error(f"Failed to evaluate anomaly scores for alert '{alert.alert_code}': {ae}")
+
         return analysis
 
     except Exception as e:

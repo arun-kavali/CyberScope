@@ -209,6 +209,25 @@ export interface RiskScoreData {
   };
 }
 
+export interface AnomalyFeatureDetail {
+  feature_name: string;
+  baseline: number;
+  observed: number;
+  deviation: number;
+  z_score: number;
+  interpretation: string;
+}
+
+export interface AnomalyScoreData {
+  score: number;
+  status: string;
+  version: string;
+  summary: string;
+  anomalous_features?: AnomalyFeatureDetail[];
+  reasons?: Record<string, any>;
+  disclaimer: string;
+}
+
 export interface AlertAnalysisRecord {
   id: string;
   alert_id: string;
@@ -221,6 +240,8 @@ export interface AlertAnalysisRecord {
     triage_priority_input?: string;
     risk_score_id?: string;
     risk_score?: RiskScoreData;
+    anomaly_score_id?: string;
+    anomaly_score?: AnomalyScoreData;
   };
   analysis_metadata?: {
     triage_version?: string;

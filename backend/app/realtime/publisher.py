@@ -143,3 +143,40 @@ def publish_scores_completed(risk_score: Any, alert: Alert) -> None:
         except Exception as e:
             logger.error(f"Error publishing scores event outside loop: {e}")
 
+def format_anomaly_completed_payload(anomaly_score: Any, alert: Alert) -> Dict[str, Any]:
+    reasons = anomaly_score.reasons or {}
+    return {
+        "type": "ANOMALY_COMPLETED",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "data": {
+            "anomaly_score_id": str(anomaly_score.id),
+            "alert_id": str(alert.id),
+            "alert_code": alert.alert_code,
+            "anomaly_score": float(anomaly_score.anomaly_score),
+            "detector_name": anomaly_score.detector_name,
+            "status": reasons.get("status", "COMPLETED"),
+            "summary": reasons.get("summary", ""),
+            "timestamp": anomaly_score.timestamp.isoformat() if isinstance(anom_ts := getattr(anomaly_score, "timestamp", None), datetime) else str(anom_ts)
+        }
+    }
+
+async def publish_anomaly_completed_async(anomaly_score: Any, alert: Alert) -> None:
+    try:
+        payload = format_anomaly_completed_payload(anomaly_score, alert)
+        await manager.broadcast_to_role(payload, "SOC_ANALYST")
+    except Exception as e:
+        logger.error(f"Failed to publish ANOMALY_COMPLETED event: {e}")
+
+def publish_anomaly_completed(anomaly_score: Any, alert: Alert) -> None:
+    try:
+        loop = asyncio.get_running_loop()
+        if loop.is_running():
+            loop.create_task(publish_anomaly_completed_async(anomaly_score, alert))
+        else:
+            asyncio.run(publish_anomaly_completed_async(anomaly_score, alert))
+    except RuntimeError:
+        try:
+            asyncio.run(publish_anomaly_completed_async(anomaly_score, alert))
+        except Exception as e:
+            logger.error(f"Error publishing anomaly event outside loop: {e}")
+

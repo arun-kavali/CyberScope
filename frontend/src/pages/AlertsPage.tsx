@@ -17,7 +17,7 @@ import {
   TriggeredRule,
   ScoreContributor
 } from '../services/alertsApi';
-import { Radio, RefreshCw, Filter, User, Server, ChevronRight, X, ShieldAlert, Cpu, Clock, Play, ChevronDown, ChevronUp, Info } from 'lucide-react';
+import { Radio, RefreshCw, Filter, User, Server, ChevronRight, X, ShieldAlert, Cpu, Clock, Play, ChevronDown, ChevronUp, Info, Activity } from 'lucide-react';
 
 export const AlertsPage: React.FC = () => {
   const { token } = useAuth();
@@ -499,6 +499,106 @@ export const AlertsPage: React.FC = () => {
                             </div>
                           </div>
                         )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Phase 11 ML & Statistical Anomaly Analysis Panel */}
+                  {analysisData.findings?.anomaly_score && (
+                    <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3 shadow-sm">
+                      <div className="flex items-center justify-between border-b border-slate-200 pb-2">
+                        <span className="font-bold text-slate-900 text-xs tracking-wide uppercase flex items-center space-x-1.5">
+                          <Activity className="h-4 w-4 text-brand-700" />
+                          <span>Phase 11 Anomaly Signal</span>
+                        </span>
+                        <span className="text-[10px] font-mono text-slate-500">
+                          Status: {analysisData.findings.anomaly_score.status || 'COMPLETED'} • v{analysisData.findings.anomaly_score.version || '1.0'}
+                        </span>
+                      </div>
+
+                      <div className="bg-white border border-slate-200 rounded-lg p-3 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <div className="text-[11px] text-slate-500 font-medium">Statistical Anomaly Score</div>
+                            <div className="text-xl font-extrabold text-slate-900 font-mono mt-0.5">
+                              {analysisData.findings.anomaly_score.score?.toFixed(0) || '0'} <span className="text-xs text-slate-400 font-normal">/ 100</span>
+                            </div>
+                          </div>
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${
+                            (analysisData.findings.anomaly_score.score || 0) >= 75
+                              ? 'bg-rose-100 text-rose-800 border-rose-300'
+                              : (analysisData.findings.anomaly_score.score || 0) >= 40
+                              ? 'bg-amber-100 text-amber-800 border-amber-300'
+                              : 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                          }`}>
+                            {analysisData.findings.anomaly_score.status === 'INSUFFICIENT_DATA'
+                              ? 'INSUFFICIENT DATA'
+                              : (analysisData.findings.anomaly_score.score || 0) >= 75
+                              ? 'HIGH ANOMALY'
+                              : (analysisData.findings.anomaly_score.score || 0) >= 40
+                              ? 'ELEVATED'
+                              : 'NORMAL PATTERN'}
+                          </span>
+                        </div>
+
+                        <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
+                          <div
+                            className={`h-full ${
+                              (analysisData.findings.anomaly_score.score || 0) >= 75
+                                ? 'bg-rose-600'
+                                : (analysisData.findings.anomaly_score.score || 0) >= 40
+                                ? 'bg-amber-500'
+                                : 'bg-emerald-500'
+                            }`}
+                            style={{ width: `${analysisData.findings.anomaly_score.score || 0}%` }}
+                          ></div>
+                        </div>
+
+                        <p className="text-slate-700 text-xs leading-relaxed pt-1">
+                          {analysisData.findings.anomaly_score.summary}
+                        </p>
+                      </div>
+
+                      {/* Anomalous Feature Evidence Table */}
+                      {analysisData.findings.anomaly_score.anomalous_features && analysisData.findings.anomaly_score.anomalous_features.length > 0 ? (
+                        <div className="space-y-2 pt-1">
+                          <div className="text-[11px] font-bold text-slate-800 uppercase tracking-wider">
+                            Anomalous Feature Evidence ({analysisData.findings.anomaly_score.anomalous_features.length})
+                          </div>
+                          <div className="space-y-2">
+                            {analysisData.findings.anomaly_score.anomalous_features.map((feat, fIdx) => (
+                              <div key={fIdx} className="bg-white border border-slate-200 rounded p-2.5 text-[11px] space-y-1">
+                                <div className="flex items-center justify-between font-bold">
+                                  <span className="text-slate-900 font-mono">{feat.feature_name}</span>
+                                  <span className="bg-rose-50 text-rose-800 border border-rose-200 px-1.5 py-0.2 rounded font-mono">
+                                    Z-Score: +{feat.z_score}
+                                  </span>
+                                </div>
+                                <p className="text-slate-700">{feat.interpretation}</p>
+                                <div className="flex justify-between text-[10px] text-slate-500 font-mono pt-1">
+                                  <span>Baseline: {feat.baseline}</span>
+                                  <span>Observed: {feat.observed}</span>
+                                  <span>Deviation: +{feat.deviation}</span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="text-[11px] text-slate-500 italic bg-white p-2.5 rounded border border-slate-200">
+                          {analysisData.findings.anomaly_score.status === 'INSUFFICIENT_DATA'
+                            ? 'Baseline data collection in progress. Minimum 3 historical alerts required for statistical z-score evaluation.'
+                            : 'All observed feature metrics are operating within normal baseline standard deviations.'}
+                        </div>
+                      )}
+
+                      {/* Anomaly Disclaimer Alert */}
+                      <div className="bg-slate-100 border border-slate-200 rounded-lg p-2.5 flex items-start space-x-2 text-[11px] text-slate-700">
+                        <Info className="h-4 w-4 text-slate-500 shrink-0 mt-0.5" />
+                        <div>
+                          <span className="font-bold">Anomaly Disclaimer: </span>
+                          {analysisData.findings.anomaly_score.disclaimer}
+                        </div>
                       </div>
                     </div>
                   )}
