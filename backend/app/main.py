@@ -5,6 +5,9 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.api.router import api_router
+from app.api import auth
+from app.db.session import SessionLocal
+from app.auth.service import seed_default_users
 
 # Configure logging
 logging.basicConfig(
@@ -17,8 +20,14 @@ logger = logging.getLogger("cyberscope")
 async def lifespan(app: FastAPI):
     """
     Lifespan events handler for startup and shutdown logging.
+    Executes database seed for default users and roles.
     """
     logger.info(f"Starting {settings.APP_NAME} API backend in {settings.APP_ENV} mode...")
+    db = SessionLocal()
+    try:
+        seed_default_users(db)
+    finally:
+        db.close()
     yield
     logger.info(f"Shutting down {settings.APP_NAME} API backend...")
 
@@ -51,5 +60,8 @@ async def root_health_check():
         "service": "cyberscope-api"
     }
 
-# Include API v1 routes
+# Direct root-level /auth routes (as required by requirement 3)
+app.include_router(auth.router)
+
+# Include API v1 routes (/api/v1/...)
 app.include_router(api_router, prefix=settings.API_V1_STR)

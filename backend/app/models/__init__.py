@@ -46,12 +46,14 @@ from app.models.response import (
     SandboxFirewallRule,
 )
 from app.models.audit import AuditLog, Report
+from app.models.auth import UserSession
 
 __all__ = [
     "Base",
     # Identity
     "Role",
     "Profile",
+    "UserSession",
     # Sources
     "AlertSource",
     "DataSource",
