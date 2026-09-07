@@ -54,3 +54,8 @@ frontend/build/
 *.swo
 .DS_Store
 Thumbs.db
+
+# Generated storage artifacts
+storage/reports/*
+!storage/reports/.gitkeep
+
