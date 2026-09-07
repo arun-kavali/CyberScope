@@ -64,28 +64,29 @@ def alert_source_token() -> str:
     return res.json()["token"]
 
 def create_sample_incident_cluster(test_db: Session) -> Tuple[Incident, Alert, Alert]:
-    user_name = f"inv_user_{uuid.uuid4().hex[:4]}"
+    uid = uuid.uuid4().hex
+    user_name = f"inv_user_{uid}"
     al1 = Alert(
-        alert_code=f"ALT-P13-{uuid.uuid4().hex[:6].upper()}",
+        alert_code=f"ALT-P13-{uid[:6].upper()}-1",
         event_type="SUSPICIOUS_LOGIN",
         event_category="AUTHENTICATION",
         severity="HIGH",
         status="NEW",
         timestamp=datetime.now(timezone.utc) - timedelta(minutes=15),
         user_context=user_name,
-        asset_context=f"host_{uuid.uuid4().hex[:4]}",
+        asset_context=f"host_{uid[:8]}",
         source_ip=f"172.16.5.{random.randint(10, 200)}",
         description="Phase 13 alert 1"
     )
     al2 = Alert(
-        alert_code=f"ALT-P13-{uuid.uuid4().hex[:6].upper()}",
+        alert_code=f"ALT-P13-{uid[:6].upper()}-2",
         event_type="PRIVILEGE_ESCALATION",
         event_category="AUTHENTICATION",
         severity="CRITICAL",
         status="NEW",
         timestamp=datetime.now(timezone.utc),
         user_context=user_name,
-        asset_context=f"host_{uuid.uuid4().hex[:4]}",
+        asset_context=f"host_{uid[:8]}",
         source_ip=f"172.16.5.{random.randint(10, 200)}",
         description="Phase 13 alert 2"
     )

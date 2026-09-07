@@ -2,6 +2,7 @@ import sys
 import os
 import io
 import json
+import uuid
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
@@ -154,9 +155,10 @@ def test_field_mapping_validation_and_import_pipeline():
     headers = {"Authorization": f"Bearer {analyst_token}"}
 
     # 1. Upload CSV to create data source
+    unique_id = str(uuid.uuid4())[:8]
     csv_content = (
         "src_event,src_sev,src_ip,dst_ip,src_user,src_desc\n"
-        "Port Scan,HIGH,192.168.21.99,10.0.0.99,phase21_unique_user,Phase 21 unique connection test\n"
+        f"Port Scan,HIGH,192.168.21.99,10.0.0.99,user_{unique_id},Phase 21 connection test {unique_id}\n"
     )
     files = {"file": ("firewall.csv", io.BytesIO(csv_content.encode("utf-8")), "text/csv")}
     disc_resp = client.post("/api/v1/sources/csv", files=files, headers=headers)
