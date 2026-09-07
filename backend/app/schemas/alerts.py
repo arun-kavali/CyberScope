@@ -29,6 +29,7 @@ class BatchAlertCreateSchema(BaseModel):
 class AlertResponseSchema(BaseModel):
     id: UUID
     alert_code: str
+    source_id: Optional[UUID] = None
     event_type: str
     event_category: str
     severity: str
@@ -51,9 +52,20 @@ class AlertResponseSchema(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
+class IngestionResultSchema(BaseModel):
+    status: str
+    alert_id: Optional[UUID] = None
+    alert_code: Optional[str] = None
+    validation: Dict[str, Any]
+    normalization: Dict[str, Any]
+    data_quality: Dict[str, Any]
+    duplicate_status: Dict[str, Any]
+    alert: Optional[AlertResponseSchema] = None
+
 class AlertBatchResponseSchema(BaseModel):
     accepted_count: int
     rejected_count: int
+    duplicate_count: int = 0
     alerts: List[AlertResponseSchema]
     message: str = "Batch ingestion processed"
 

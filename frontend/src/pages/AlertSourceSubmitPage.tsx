@@ -83,8 +83,8 @@ export const AlertSourceSubmitPage: React.FC = () => {
     <div className="space-y-6">
       <PageHeader
         title="Submit Synthetic Security Alert"
-        subtitle="Manual single-alert ingestion constructor adhering to CyberScope common alert schema"
-        phaseBadge="Phase 6 Ingestion Active"
+        subtitle="Manual alert ingestion through Phase 7 validation, normalization, and data-quality pipeline"
+        phaseBadge="Phase 7 Pipeline Active"
         breadcrumbs={[{ label: 'Alert Source' }, { label: 'Submit Alert' }]}
       />
 
@@ -93,13 +93,25 @@ export const AlertSourceSubmitPage: React.FC = () => {
       {submittedAlert && (
         <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-5 text-emerald-900 shadow-sm flex items-start space-x-3">
           <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0 mt-0.5" />
-          <div className="space-y-1">
+          <div className="space-y-2">
             <h4 className="text-sm font-semibold text-emerald-950">
-              Alert Successfully Submitted to PostgreSQL!
+              Alert Successfully Validated, Normalized & Persisted!
             </h4>
             <p className="text-xs text-emerald-800">
               Alert Code: <code className="font-mono bg-emerald-100 px-1.5 py-0.5 rounded text-emerald-900 font-bold">{submittedAlert.alert_code}</code> | Database ID: <code className="font-mono text-[11px] text-emerald-700">{submittedAlert.id}</code>
             </p>
+
+            <div className="flex flex-wrap gap-2 pt-1 text-[11px]">
+              <span className="bg-emerald-100 text-emerald-900 px-2 py-0.5 rounded font-semibold">
+                Validation: Passed
+              </span>
+              <span className="bg-emerald-100 text-emerald-900 px-2 py-0.5 rounded font-semibold">
+                Normalization: Applied
+              </span>
+              <span className="bg-emerald-100 text-emerald-900 px-2 py-0.5 rounded font-semibold">
+                Data Quality: {submittedAlert.alert_metadata?.data_quality?.status || 'PASSED'}
+              </span>
+            </div>
           </div>
         </div>
       )}

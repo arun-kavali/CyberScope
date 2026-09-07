@@ -185,8 +185,8 @@ export const AlertSourceScenariosPage: React.FC = () => {
     <div className="space-y-6">
       <PageHeader
         title="Synthetic Scenario Generator"
-        subtitle="Pre-configured multi-stage threat scenario selection, preview, and batch ingestion"
-        phaseBadge="Phase 6 Ingestion Active"
+        subtitle="Pre-configured threat scenario selection, preview, and batch ingestion through Phase 7 validation pipeline"
+        phaseBadge="Phase 7 Pipeline Active"
         breadcrumbs={[{ label: 'Alert Source' }, { label: 'Scenario Generator' }]}
       />
 
@@ -197,10 +197,10 @@ export const AlertSourceScenariosPage: React.FC = () => {
           <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0 mt-0.5" />
           <div className="space-y-1">
             <h4 className="text-sm font-semibold text-emerald-950">
-              Batch Ingestion Successful!
+              Batch Ingestion & Normalization Complete!
             </h4>
             <p className="text-xs text-emerald-800">
-              Ingested <strong className="text-emerald-950">{batchResponse.accepted_count}</strong> synthetic alerts into PostgreSQL.
+              Accepted & Persisted: <strong className="text-emerald-950">{batchResponse.accepted_count}</strong> | Duplicates Detected: <strong className="text-emerald-950">{batchResponse.duplicate_count || 0}</strong> | Rejected: <strong className="text-emerald-950">{batchResponse.rejected_count}</strong>
             </p>
           </div>
         </div>

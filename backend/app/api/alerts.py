@@ -17,9 +17,11 @@ from app.schemas.alerts import (
     AlertResponseSchema,
     AlertBatchResponseSchema,
     ScenarioGenerateRequestSchema,
-    ScenarioPreviewResponseSchema
+    ScenarioPreviewResponseSchema,
+    IngestionResultSchema
 )
 from app.services.generator import generate_synthetic_alerts_data, EXACT_SCENARIO_CATEGORIES
+from app.services.ingestion import process_alert_ingestion
 
 router = APIRouter(prefix="/alerts", tags=["Alerts"])
 
@@ -45,56 +47,19 @@ async def submit_single_alert(
     current_user: Profile = Depends(require_alert_source)
 ):
     """
-    Submits and persists a single synthetic security alert into PostgreSQL.
+    Submits, validates, normalizes, and persists a single synthetic security alert into PostgreSQL.
     Strictly protected for ALERT_SOURCE role.
     """
-    if payload.event_category not in EXACT_SCENARIO_CATEGORIES:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"Invalid event_category '{payload.event_category}'. Must be one of {list(EXACT_SCENARIO_CATEGORIES.keys())}"
-        )
-
-    if payload.severity not in ["LOW", "MEDIUM", "HIGH", "CRITICAL"]:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"Invalid severity '{payload.severity}'. Must be LOW, MEDIUM, HIGH, or CRITICAL."
-        )
-
     source_id = _get_or_create_default_source(db)
-    event_timestamp = payload.timestamp or datetime.now(timezone.utc)
-    if event_timestamp.tzinfo is None:
-        event_timestamp = event_timestamp.replace(tzinfo=timezone.utc)
+    result = process_alert_ingestion(db, payload.model_dump(), source_id=source_id)
 
-    alert_code = f"ALT-{random.randint(10000, 99999)}"
+    if result.status == "FAILED":
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=result.validation["issues"]
+        )
 
-    db_alert = Alert(
-        alert_code=alert_code,
-        source_id=source_id,
-        event_type=payload.event_type,
-        event_category=payload.event_category,
-        severity=payload.severity,
-        status=payload.status or "NEW",
-        timestamp=event_timestamp,
-        user_context=payload.user_context,
-        asset_context=payload.asset_context,
-        source_ip=payload.source_ip,
-        destination_ip=payload.destination_ip,
-        source_port=payload.source_port,
-        destination_port=payload.destination_port,
-        protocol=payload.protocol,
-        action=payload.action,
-        description=payload.description,
-        indicator=payload.indicator,
-        technique=payload.technique,
-        raw_payload=payload.raw_payload or {},
-        alert_metadata=payload.alert_metadata or {"synthetic": True}
-    )
-
-    db.add(db_alert)
-    db.commit()
-    db.refresh(db_alert)
-
-    return db_alert
+    return result.alert
 
 @router.post("/batch", response_model=AlertBatchResponseSchema, status_code=status.HTTP_201_CREATED)
 async def submit_batch_alerts(
@@ -103,7 +68,8 @@ async def submit_batch_alerts(
     current_user: Profile = Depends(require_alert_source)
 ):
     """
-    Submits a batch of synthetic security alerts into PostgreSQL with quantity limit protection (max 100).
+    Submits a batch of synthetic security alerts through the Phase 7 ingestion pipeline.
+    Max quantity limit: 100 per batch.
     """
     if len(payload.alerts) > 100:
         raise HTTPException(
@@ -112,48 +78,28 @@ async def submit_batch_alerts(
         )
 
     source_id = _get_or_create_default_source(db)
-    created_alerts = []
+    accepted_alerts = []
+    rejected_count = 0
+    duplicate_count = 0
 
     for alert_data in payload.alerts:
-        event_timestamp = alert_data.timestamp or datetime.now(timezone.utc)
-        if event_timestamp.tzinfo is None:
-            event_timestamp = event_timestamp.replace(tzinfo=timezone.utc)
-
-        alert_code = f"ALT-{random.randint(10000, 99999)}"
-        db_alert = Alert(
-            alert_code=alert_code,
-            source_id=source_id,
-            event_type=alert_data.event_type,
-            event_category=alert_data.event_category,
-            severity=alert_data.severity,
-            status=alert_data.status or "NEW",
-            timestamp=event_timestamp,
-            user_context=alert_data.user_context,
-            asset_context=alert_data.asset_context,
-            source_ip=alert_data.source_ip,
-            destination_ip=alert_data.destination_ip,
-            source_port=alert_data.source_port,
-            destination_port=alert_data.destination_port,
-            protocol=alert_data.protocol,
-            action=alert_data.action,
-            description=alert_data.description,
-            indicator=alert_data.indicator,
-            technique=alert_data.technique,
-            raw_payload=alert_data.raw_payload or {},
-            alert_metadata=alert_data.alert_metadata or {"synthetic": True}
-        )
-        db.add(db_alert)
-        created_alerts.append(db_alert)
-
-    db.commit()
-    for a in created_alerts:
-        db.refresh(a)
+        res = process_alert_ingestion(db, alert_data.model_dump(), source_id=source_id, is_batch=True)
+        if res.status == "FAILED":
+            rejected_count += 1
+        elif res.status == "DUPLICATE":
+            duplicate_count += 1
+            if res.alert:
+                accepted_alerts.append(res.alert)
+        else:
+            if res.alert:
+                accepted_alerts.append(res.alert)
 
     return AlertBatchResponseSchema(
-        accepted_count=len(created_alerts),
-        rejected_count=0,
-        alerts=created_alerts,
-        message=f"Successfully ingested {len(created_alerts)} synthetic alerts into PostgreSQL."
+        accepted_count=len(accepted_alerts),
+        rejected_count=rejected_count,
+        duplicate_count=duplicate_count,
+        alerts=accepted_alerts,
+        message=f"Ingestion complete. Accepted: {len(accepted_alerts)}, Duplicates: {duplicate_count}, Rejected: {rejected_count}."
     )
 
 @router.post("/generate-preview", response_model=ScenarioPreviewResponseSchema, status_code=status.HTTP_200_OK)
@@ -213,3 +159,20 @@ async def list_submitted_alerts(
     query = query.order_by(desc(Alert.created_at)).offset((page - 1) * page_size).limit(page_size)
     alerts = db.scalars(query).all()
     return alerts
+
+@router.get("/{alert_id}", response_model=AlertResponseSchema, status_code=status.HTTP_200_OK)
+async def get_alert_by_id(
+    alert_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: Profile = Depends(get_current_user)
+):
+    """
+    Retrieves a single normalized alert by UUID.
+    """
+    alert = db.scalar(select(Alert).where(Alert.id == alert_id))
+    if not alert:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Alert with ID '{alert_id}' not found."
+        )
+    return alert

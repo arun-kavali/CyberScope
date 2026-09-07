@@ -45,6 +45,7 @@ export interface ScenarioPreviewResponse {
 export interface AlertRecord {
   id: string;
   alert_code: string;
+  source_id?: string;
   event_type: string;
   event_category: string;
   severity: string;
@@ -69,6 +70,7 @@ export interface AlertRecord {
 export interface AlertBatchResponse {
   accepted_count: number;
   rejected_count: number;
+  duplicate_count?: number;
   alerts: AlertRecord[];
   message: string;
 }
@@ -85,7 +87,10 @@ export async function submitSingleAlertApi(token: string, payload: AlertCreatePa
 
   if (!res.ok) {
     const errorData = await res.json().catch(() => ({ detail: 'Failed to submit alert' }));
-    throw new Error(errorData.detail || `Server returned status ${res.status}`);
+    const detailMsg = Array.isArray(errorData.detail)
+      ? errorData.detail.join(' | ')
+      : (errorData.detail || `Server returned status ${res.status}`);
+    throw new Error(detailMsg);
   }
 
   return res.json();
@@ -103,7 +108,10 @@ export async function submitBatchAlertsApi(token: string, alerts: AlertCreatePay
 
   if (!res.ok) {
     const errorData = await res.json().catch(() => ({ detail: 'Failed to submit batch alerts' }));
-    throw new Error(errorData.detail || `Server returned status ${res.status}`);
+    const detailMsg = Array.isArray(errorData.detail)
+      ? errorData.detail.join(' | ')
+      : (errorData.detail || `Server returned status ${res.status}`);
+    throw new Error(detailMsg);
   }
 
   return res.json();
@@ -146,6 +154,22 @@ export async function getAlertsHistoryApi(
 
   if (!res.ok) {
     const errorData = await res.json().catch(() => ({ detail: 'Failed to fetch submission history' }));
+    throw new Error(errorData.detail || `Server returned status ${res.status}`);
+  }
+
+  return res.json();
+}
+
+export async function getAlertByIdApi(token: string, alertId: string): Promise<AlertRecord> {
+  const res = await fetch(`${API_BASE_URL}/alerts/${alertId}`, {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({ detail: 'Alert not found' }));
     throw new Error(errorData.detail || `Server returned status ${res.status}`);
   }
 
