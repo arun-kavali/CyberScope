@@ -120,8 +120,8 @@ def test_account_takeover_demo_sequence():
     )
     if not inc:
         inc = Incident(
-            incident_number=f"INC-{datetime.now().year}-{uuid.uuid4().hex[:4].upper()}",
-            title=f"Account Takeover Incident — {demo_user}",
+            incident_number=f"INC-{datetime.now().year}-{uuid.uuid4().hex[:6].upper()}",
+            title=f"Account Takeover Incident - {demo_user}",
             severity="CRITICAL",
             status="OPEN",
             risk_score=96.0,

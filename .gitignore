@@ -55,7 +55,8 @@ frontend/build/
 .DS_Store
 Thumbs.db
 
-# Generated storage artifacts
+# Generated storage & temporary artifacts
 storage/reports/*
 !storage/reports/.gitkeep
+scratch/
 

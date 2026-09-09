@@ -36,11 +36,14 @@ export const MetricCard: React.FC<MetricCardProps> = ({
 
   const renderIcon = () => {
     if (!icon) return null;
-    if (typeof icon === 'function') {
-      const IconComponent = icon as LucideIcon;
+    if (React.isValidElement(icon)) {
+      return icon;
+    }
+    if (typeof icon === 'function' || (typeof icon === 'object' && (icon as any).render)) {
+      const IconComponent = icon as React.ComponentType<{ className?: string }>;
       return <IconComponent className="h-4 w-4" />;
     }
-    return icon;
+    return null;
   };
 
   return (

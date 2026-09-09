@@ -1,4 +1,6 @@
-const API_BASE = '/api/v1/sources';
+import { API_BASE_URL } from './api';
+
+const API_BASE = `${API_BASE_URL}/api/v1/sources`;
 
 export interface DataSourceItem {
   id: string;
@@ -47,8 +49,8 @@ export interface ImportResponse {
   errors: string[];
 }
 
-function getHeaders(): HeadersInit {
-  const token = localStorage.getItem('cyberscope_token') || localStorage.getItem('token') || '';
+function getHeaders(authToken?: string): HeadersInit {
+  const token = authToken || localStorage.getItem('cyberscope_token') || '';
   return {
     Authorization: `Bearer ${token}`,
   };

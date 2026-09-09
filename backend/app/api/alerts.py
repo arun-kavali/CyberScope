@@ -66,7 +66,7 @@ async def submit_single_alert(
     Strictly protected for ALERT_SOURCE role.
     """
     source_id = _get_or_create_default_source(db)
-    result = process_alert_ingestion(db, payload.model_dump(), source_id=source_id)
+    result = process_alert_ingestion(db, payload.model_dump(), source_id=source_id, submitted_by_user_id=current_user.id)
 
     if result.status == "FAILED":
         raise HTTPException(
@@ -98,7 +98,7 @@ async def submit_batch_alerts(
     duplicate_count = 0
 
     for alert_data in payload.alerts:
-        res = process_alert_ingestion(db, alert_data.model_dump(), source_id=source_id, is_batch=True)
+        res = process_alert_ingestion(db, alert_data.model_dump(), source_id=source_id, is_batch=True, submitted_by_user_id=current_user.id)
         if res.status == "FAILED":
             rejected_count += 1
         elif res.status == "DUPLICATE":
@@ -178,6 +178,19 @@ async def list_submitted_alerts(
     Accessible to authenticated users.
     """
     query = select(Alert)
+
+    # Per-User Data Ownership: ALERT_SOURCE users see their own submitted alerts
+    if current_user.role and current_user.role.name == "ALERT_SOURCE":
+        if current_user.username == "alert_source":
+            # Default seeded source user coexists with seeded alerts
+            query = query.where(
+                or_(
+                    Alert.submitted_by_user_id == current_user.id,
+                    Alert.submitted_by_user_id.is_(None)
+                )
+            )
+        else:
+            query = query.where(Alert.submitted_by_user_id == current_user.id)
 
     if category and category.upper() != "ALL":
         query = query.where(Alert.event_category == category.upper())

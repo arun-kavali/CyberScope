@@ -3,7 +3,7 @@ import logging
 from datetime import datetime, timezone, timedelta
 from typing import Optional
 from sqlalchemy.orm import Session
-from sqlalchemy import select
+from sqlalchemy import select, func
 
 from app.models.identity import Role, Profile
 from app.models.auth import UserSession
@@ -79,6 +79,58 @@ def seed_default_users(db: Session) -> None:
     except Exception as e:
         db.rollback()
         logger.error(f"Error seeding default users: {e}")
+
+ALLOWED_SIGNUP_ROLES = {"SOC_ANALYST", "ALERT_SOURCE"}
+
+def register_user_account(
+    db: Session,
+    full_name: str,
+    username: str,
+    email: str,
+    password: str,
+    role_name: str
+) -> Profile:
+    """
+    Registers a new user account with server-side validation and password hashing.
+    Strictly validates role against ALLOWED_SIGNUP_ROLES.
+    """
+    clean_username = username.strip().lower()
+    clean_email = email.strip().lower()
+    clean_role = role_name.strip().upper()
+
+    if clean_role not in ALLOWED_SIGNUP_ROLES:
+        raise ValueError(f"Invalid role '{role_name}'. Permitted roles are: SOC_ANALYST, ALERT_SOURCE.")
+
+    # Check username uniqueness
+    existing_user = db.scalar(select(Profile).where(func.lower(Profile.username) == clean_username))
+    if existing_user:
+        raise ValueError("Username is already registered. Please choose a different username.")
+
+    # Check email uniqueness
+    existing_email = db.scalar(select(Profile).where(func.lower(Profile.email) == clean_email))
+    if existing_email:
+        raise ValueError("Email address is already registered. Please use a different email.")
+
+    # Fetch role
+    role = db.scalar(select(Role).where(Role.name == clean_role))
+    if not role:
+        role = Role(name=clean_role, description=f"{clean_role} User Role")
+        db.add(role)
+        db.flush()
+
+    new_profile = Profile(
+        username=clean_username,
+        email=clean_email,
+        full_name=full_name.strip(),
+        role_id=role.id,
+        is_active=True,
+        is_superuser=False,
+        hashed_password=hash_password(password)
+    )
+    db.add(new_profile)
+    db.commit()
+    db.refresh(new_profile)
+    return new_profile
 
 def authenticate_user(db: Session, username: str, password: str) -> Optional[Profile]:
     """

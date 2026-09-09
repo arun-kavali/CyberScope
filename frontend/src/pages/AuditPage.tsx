@@ -47,9 +47,9 @@ export const AuditPage: React.FC = () => {
   return (
     <div className="space-y-4">
       <PageHeader
-        title="Immutable System & Action Audit Trail"
-        subtitle="Audited log of analyst security actions, AI model executions, response approvals, and RBAC decisions"
-        phaseBadge="Phase 22 Active"
+        title="Audit Trail"
+        subtitle="Audited log of analyst security actions, AI executions, and system decisions."
+        phaseBadge="SOC Operations"
         breadcrumbs={[{ label: 'CyberScope' }, { label: 'Audit Trail' }]}
         actions={
           <form onSubmit={handleSearchSubmit} className="flex items-center space-x-2">

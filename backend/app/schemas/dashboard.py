@@ -58,6 +58,7 @@ class DashboardSummaryResponse(BaseModel):
     risk_distribution: List[DistributionItemSchema]
     source_distribution: List[DistributionItemSchema]
     category_distribution: List[DistributionItemSchema]
+    incident_status_distribution: Optional[List[DistributionItemSchema]] = None
     critical_alerts: List[DashboardAlertItemSchema]
     active_incidents: List[DashboardIncidentItemSchema]
     recent_incidents: List[DashboardIncidentItemSchema]

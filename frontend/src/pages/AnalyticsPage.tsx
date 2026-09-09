@@ -124,9 +124,9 @@ export const AnalyticsPage: React.FC = () => {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Operational Security Evidence Analytics Engine"
-        subtitle="Realtime statistical evidence processing across alerts, incidents, investigations, escalations & dispositions"
-        phaseBadge="Phase 17 Operational Analytics"
+        title="Analytics"
+        subtitle="Operational metrics, alert trends, severity distribution, and entity analytics."
+        phaseBadge="SOC Operations"
         breadcrumbs={[{ label: 'CyberScope' }, { label: 'Analytics' }]}
         actions={
           <div className="flex items-center space-x-3 text-xs">

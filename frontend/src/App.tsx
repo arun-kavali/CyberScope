@@ -32,7 +32,7 @@ import { AlertSourceSubmitPage } from './pages/AlertSourceSubmitPage';
 import { AlertSourceScenariosPage } from './pages/AlertSourceScenariosPage';
 import { AlertSourceHistoryPage } from './pages/AlertSourceHistoryPage';
 
-const queryClient = new QueryClient({
+export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       staleTime: 5000,
@@ -89,8 +89,10 @@ export const App: React.FC = () => {
                 <Route path="response" element={<ResponsePage />} />
                 <Route path="reports" element={<ReportsPage />} />
                 <Route path="audit" element={<AuditPage />} />
-                <Route path="*" element={<NotFoundPage />} />
               </Route>
+
+              {/* Global Catch-All Fallback */}
+              <Route path="*" element={<NotFoundPage />} />
             </Routes>
           </BrowserRouter>
         </RealtimeProvider>

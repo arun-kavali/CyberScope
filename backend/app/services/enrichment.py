@@ -38,8 +38,19 @@ def enrich_alert_context(db: Session, alert: Alert) -> Dict[str, Any]:
                 (Asset.asset_id_code == asset_str)
             )
             asset_obj = db.scalar(stmt)
+            if not asset_obj:
+                short_name = asset_str.split(".")[0] if "." in asset_str else asset_str
+                stmt_fallback = select(Asset).where(
+                    (Asset.name.ilike(f"%{short_name}%")) |
+                    (Asset.asset_id_code.ilike(f"%{short_name}%")) |
+                    (Asset.hostname.ilike(f"%{short_name}%"))
+                )
+                asset_obj = db.scalar(stmt_fallback)
 
         if asset_obj:
+            alert.asset_id = asset_obj.id
+            if not alert.asset_context or alert.asset_context == "Unknown / Unresolved":
+                alert.asset_context = asset_obj.name or asset_obj.hostname or asset_obj.asset_id_code
             enrichment["asset"] = {
                 "context_available": True,
                 "asset_id": str(asset_obj.id),
@@ -73,8 +84,19 @@ def enrich_alert_context(db: Session, alert: Alert) -> Dict[str, Any]:
                 (UserDirectory.name == user_str)
             )
             user_obj = db.scalar(stmt)
+            if not user_obj:
+                clean_name = user_str.replace("usr_", "").replace("_", " ")
+                stmt_fallback = select(UserDirectory).where(
+                    (UserDirectory.user_id_code.ilike(f"%{clean_name}%")) |
+                    (UserDirectory.email.ilike(f"%{clean_name}%")) |
+                    (UserDirectory.name.ilike(f"%{clean_name}%"))
+                )
+                user_obj = db.scalar(stmt_fallback)
 
         if user_obj:
+            alert.user_id = user_obj.id
+            if not alert.user_context or alert.user_context == "Unknown / Unresolved":
+                alert.user_context = user_obj.user_id_code or user_obj.name or user_obj.email
             is_priv = any(kw in (user_obj.name or "").lower() for kw in ["admin", "root", "sec"]) or \
                       any(kw in (user_obj.user_id_code or "").lower() for kw in ["admin", "root"]) or \
                       any(kw in (user_obj.email or "").lower() for kw in ["admin", "root", "sec"]) or \

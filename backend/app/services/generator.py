@@ -41,13 +41,15 @@ EXACT_SCENARIO_CATEGORIES = {
 
 # Pre-defined realistic synthetic pools (offline-capable, safe, reserved ranges)
 SYNTHETIC_USERS = [
-    "usr_jdoe", "usr_msmith", "usr_ajohnson", "usr_bwilson", "usr_admin_dev",
-    "usr_sec_analyst", "usr_service_acct", "usr_sys_admin", "usr_hr_lead", "usr_finance_mgr"
+    "usr_jdoe", "jdoe@cyberscope.local", "John Doe", "USR-TEST-01",
+    "admin_sec", "admin_sec@cyberscope.local", "global_admin",
+    "usr_msmith", "usr_ajohnson", "usr_bwilson"
 ]
 
 SYNTHETIC_ASSETS = [
-    {"name": "DC-01.cyberscope.local", "type": "SERVER", "ip": "10.0.1.10"},
     {"name": "WORKSTATION-482.cyberscope.local", "type": "ENDPOINT", "ip": "192.168.1.105"},
+    {"name": "CRIT-DC-01", "type": "SERVER", "ip": "10.0.0.5"},
+    {"name": "AUTH-PROD-01", "type": "SERVER", "ip": "10.0.1.10"},
     {"name": "SQL-PROD-02.cyberscope.local", "type": "SERVER", "ip": "10.0.2.20"},
     {"name": "FW-INTERNAL-01", "type": "FIREWALL", "ip": "10.0.0.1"},
     {"name": "MAIL-GW-01.cyberscope.local", "type": "SERVER", "ip": "10.0.4.5"}

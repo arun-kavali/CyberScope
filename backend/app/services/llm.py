@@ -93,7 +93,8 @@ class OllamaService:
             "stream": False,
             "options": {
                 "temperature": 0.2,
-                "num_predict": 512
+                "num_predict": 384,
+                "num_ctx": 2048
             }
         }
 
@@ -122,7 +123,7 @@ class OllamaService:
                     raise OllamaServiceException(f"Failed to parse structured JSON output from Ollama: {str(err)}")
 
         except httpx.TimeoutException:
-            raise OllamaServiceException(f"Ollama request timed out after {self.timeout}s.")
+            raise OllamaServiceException(f"Local Ollama AI did not respond within the configured timeout ({self.timeout}s).")
         except httpx.ConnectError:
             raise OllamaServiceException(f"Connection refused connecting to local Ollama server at {self.base_url}.")
         except Exception as e:

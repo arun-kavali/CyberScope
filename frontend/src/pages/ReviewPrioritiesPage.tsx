@@ -49,9 +49,9 @@ export const ReviewPrioritiesPage: React.FC = () => {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Review Priorities & Supervisory Risk Indicators"
-        subtitle="Operational triage queue prioritized by evidence-backed risk indicators, negative space deviations, and execution gaps"
-        phaseBadge="Phase 19 Operational Review"
+        title="Review Priorities"
+        subtitle="Operational triage queue prioritized by evidence-backed risk indicators."
+        phaseBadge="SOC Operations"
         breadcrumbs={[{ label: 'CyberScope' }, { label: 'Review Priorities' }]}
       />
 

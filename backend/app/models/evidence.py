@@ -80,6 +80,9 @@ class Alert(Base):
     source_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True), ForeignKey("alert_sources.id", ondelete="SET NULL"), nullable=True
     )
+    submitted_by_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("profiles.id", ondelete="SET NULL"), index=True, nullable=True
+    )
     event_type: Mapped[str] = mapped_column(String(100), index=True, nullable=False)
     event_category: Mapped[str] = mapped_column(String(100), index=True, nullable=False)
     severity: Mapped[str] = mapped_column(String(20), index=True, nullable=False) # CRITICAL, HIGH, MEDIUM, LOW, INFO
@@ -146,6 +149,9 @@ class Investigation(Base):
     )
     case_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True), ForeignKey("cases.id", ondelete="SET NULL"), nullable=True
+    )
+    created_by_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("profiles.id", ondelete="SET NULL"), index=True, nullable=True
     )
     summary: Mapped[str] = mapped_column(Text, nullable=False)
     status: Mapped[str] = mapped_column(String(20), index=True, default="IN_PROGRESS", nullable=False)

@@ -1,4 +1,4 @@
-const API_BASE = '/api/v1/audit';
+import { API_BASE_URL } from './api';
 
 export interface AuditLogItem {
   id: string;
@@ -22,10 +22,11 @@ export interface AuditLogListResponse {
   items: AuditLogItem[];
 }
 
-function getHeaders(): HeadersInit {
-  const token = localStorage.getItem('cyberscope_token') || localStorage.getItem('token') || '';
+function getHeaders(token?: string): HeadersInit {
+  const authToken = token || localStorage.getItem('cyberscope_token') || localStorage.getItem('token') || '';
   return {
-    Authorization: `Bearer ${token}`,
+    Authorization: `Bearer ${authToken}`,
+    'Content-Type': 'application/json',
   };
 }
 
@@ -34,15 +35,15 @@ export async function getAuditLogsApi(params?: {
   page_size?: number;
   action?: string;
   target_type?: string;
-}): Promise<AuditLogListResponse> {
-  const url = new URL(API_BASE, window.location.origin);
+}, token?: string): Promise<AuditLogListResponse> {
+  const url = new URL(`${API_BASE_URL}/audit`);
   if (params?.page) url.searchParams.set('page', params.page.toString());
   if (params?.page_size) url.searchParams.set('page_size', params.page_size.toString());
   if (params?.action) url.searchParams.set('action', params.action);
   if (params?.target_type) url.searchParams.set('target_type', params.target_type);
 
   const res = await fetch(url.toString(), {
-    headers: getHeaders(),
+    headers: getHeaders(token),
   });
   if (!res.ok) {
     throw new Error(`Failed to fetch audit logs: ${res.statusText}`);

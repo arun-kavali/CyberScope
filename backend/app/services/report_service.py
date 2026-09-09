@@ -318,11 +318,14 @@ class ReportService:
         db: Session,
         page: int = 1,
         page_size: int = 20,
-        report_type: Optional[str] = None
+        report_type: Optional[str] = None,
+        user_id: Optional[uuid.UUID] = None
     ) -> Tuple[List[Report], int]:
         stmt = select(Report)
         if report_type:
             stmt = stmt.where(Report.report_type == report_type)
+        if user_id:
+            stmt = stmt.where((Report.generated_by == user_id) | (Report.generated_by.is_(None)))
 
         total = db.scalar(select(func.count()).select_from(stmt.subquery())) or 0
         stmt = stmt.order_by(desc(Report.created_at)).offset((page - 1) * page_size).limit(page_size)

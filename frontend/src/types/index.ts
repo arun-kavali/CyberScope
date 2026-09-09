@@ -30,6 +30,14 @@ export interface LoginRequest {
   password: string;
 }
 
+export interface SignupRequest {
+  full_name: string;
+  username: string;
+  email: string;
+  password: string;
+  role: 'SOC_ANALYST' | 'ALERT_SOURCE';
+}
+
 export interface LogoutResponse {
   message: string;
 }
@@ -95,6 +103,7 @@ export interface DashboardSummaryResponse {
   risk_distribution: DistributionItem[];
   source_distribution: DistributionItem[];
   category_distribution: DistributionItem[];
+  incident_status_distribution?: DistributionItem[];
   critical_alerts: DashboardAlertItem[];
   active_incidents: DashboardIncidentItem[];
   recent_incidents: DashboardIncidentItem[];

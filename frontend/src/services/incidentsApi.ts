@@ -75,7 +75,7 @@ export interface IncidentDetailRecord {
 }
 
 function getAuthHeaders(token?: string): Record<string, string> {
-  const authToken = token || localStorage.getItem('cyberscope_auth_token');
+  const authToken = token || localStorage.getItem('cyberscope_token') || '';
   return {
     'Content-Type': 'application/json',
     ...(authToken ? { Authorization: `Bearer ${authToken}` } : {})
@@ -232,4 +232,22 @@ export async function fetchIncidentIntelligence(
 
   return res.json();
 }
+
+export async function resolveIncident(
+  incidentId: string,
+  token?: string
+): Promise<{ status: string; message: string; incident_id: string; new_status: string }> {
+  const res = await fetch(`${API_BASE_URL}/incidents/${incidentId}/resolve`, {
+    method: 'POST',
+    headers: getAuthHeaders(token)
+  });
+
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({ detail: 'Failed to resolve incident' }));
+    throw new Error(errorData.detail || `Resolve incident failed with status ${res.status}`);
+  }
+
+  return res.json();
+}
+
 

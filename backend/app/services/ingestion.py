@@ -68,7 +68,8 @@ def process_alert_ingestion(
     db: Session,
     alert_data: Dict[str, Any],
     source_id: uuid.UUID,
-    is_batch: bool = False
+    is_batch: bool = False,
+    submitted_by_user_id: Optional[uuid.UUID] = None
 ) -> IngestionResult:
     """
     Executes the complete Phase 7 alert ingestion pipeline:
@@ -152,6 +153,7 @@ def process_alert_ingestion(
     db_alert = Alert(
         alert_code=alert_code,
         source_id=source_id,
+        submitted_by_user_id=submitted_by_user_id,
         event_type=normalized["event_type"],
         event_category=normalized["event_category"],
         severity=normalized["severity"],

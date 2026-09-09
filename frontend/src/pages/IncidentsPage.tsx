@@ -1,34 +1,62 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { PageHeader } from '../components/PageHeader';
 import { Card } from '../components/Card';
+import { useAuth } from '../context/AuthContext';
 import { 
   ShieldAlert, 
-  Layers, 
-  ChevronRight, 
   RefreshCw, 
   X, 
-  Activity, 
-  User,
-  HardDrive,
   Filter,
   Search,
-  Shield,
   UserX,
   CheckCircle2,
-  Info,
-  Lock
+  Sparkles,
+  AlertTriangle,
+  Ban,
+  ShieldCheck,
+  ChevronRight,
+  Info
 } from 'lucide-react';
 import { 
   fetchIncidents, 
   fetchIncidentById, 
+  fetchIncidentIntelligence,
   startInvestigation,
+  resolveIncident,
   IncidentSummaryRecord, 
-  IncidentDetailRecord 
+  IncidentDetailRecord,
+  IncidentIntelligenceSummary
 } from '../services/incidentsApi';
+import { generateIncidentAIIntelligence } from '../services/aiApi';
+import { createResponseActionApi } from '../services/responseApi';
+
+function formatRelativeTime(dateStr?: string): string {
+  if (!dateStr) return 'N/A';
+  try {
+    const d = new Date(dateStr);
+    const now = new Date();
+    const diffMs = now.getTime() - d.getTime();
+    const diffMins = Math.floor(diffMs / (1000 * 60));
+    if (diffMins < 1) return 'just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    const diffHours = Math.floor(diffMins / 60);
+    if (diffHours < 24) return `${diffHours}h ago`;
+    const diffDays = Math.floor(diffHours / 24);
+    if (diffDays < 30) return `${diffDays}d ago`;
+    const diffMonths = Math.floor(diffDays / 30);
+    return `about ${diffMonths} month${diffMonths > 1 ? 's' : ''} ago`;
+  } catch {
+    return dateStr;
+  }
+}
 
 export const IncidentsPage: React.FC = () => {
   const navigate = useNavigate();
+  const { token } = useAuth();
+  const queryClient = useQueryClient();
+
   const [incidents, setIncidents] = useState<IncidentSummaryRecord[]>([]);
   const [total, setTotal] = useState<number>(0);
   const [loading, setLoading] = useState<boolean>(true);
@@ -38,31 +66,37 @@ export const IncidentsPage: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [severityFilter, setSeverityFilter] = useState<string>('');
 
-  // Selected Incident Detail Drawer
+  // Selected Incident Detail Drawer / Modal
   const [selectedIncidentId, setSelectedIncidentId] = useState<string | null>(null);
   const [detailData, setDetailData] = useState<IncidentDetailRecord | null>(null);
   const [detailLoading, setDetailLoading] = useState<boolean>(false);
   const [detailError, setDetailError] = useState<string | null>(null);
 
-  const handleStartInvestigation = async (id: string, e?: React.MouseEvent) => {
-    if (e) e.stopPropagation();
-    try {
-      await startInvestigation(id);
-    } catch (err) {
-      // Proceed even if investigation is already active
-    }
-    navigate(`/investigations?incident_id=${id}`);
-  };
+  // AI Intelligence state for selected incident
+  const [aiIntel, setAiIntel] = useState<IncidentIntelligenceSummary | null>(null);
+  const [aiIntelLoading, setAiIntelLoading] = useState<boolean>(false);
+  const [aiIntelError, setAiIntelError] = useState<string | null>(null);
+
+  // Response action feedback
+  const [actionFeedback, setActionFeedback] = useState<string | null>(null);
+  const [actionLoading, setActionLoading] = useState<boolean>(false);
+
+  // Resolution loading state
+  const [resolving, setResolving] = useState<boolean>(false);
 
   const loadIncidents = async () => {
     try {
       setLoading(true);
       setError(null);
-      const res = await fetchIncidents(1, 50, statusFilter, severityFilter);
+      const res = await fetchIncidents(1, 50, statusFilter, severityFilter, token || undefined);
       setIncidents(res.items);
       setTotal(res.total);
     } catch (err: any) {
-      setError(err.message || 'Failed to load incidents');
+      if (err.message?.includes('expired') || err.message?.includes('token')) {
+        setError('Your session has expired. Please sign in again.');
+      } else {
+        setError(err.message || 'Unable to load incidents');
+      }
     } finally {
       setLoading(false);
     }
@@ -70,17 +104,24 @@ export const IncidentsPage: React.FC = () => {
 
   useEffect(() => {
     loadIncidents();
-  }, [statusFilter, severityFilter]);
+  }, [statusFilter, severityFilter, token]);
 
   const handleSelectIncident = async (id: string) => {
     setSelectedIncidentId(id);
+    setAiIntel(null);
+    setAiIntelError(null);
+    setActionFeedback(null);
     try {
       setDetailLoading(true);
       setDetailError(null);
-      const res = await fetchIncidentById(id);
+      const res = await fetchIncidentById(id, token || undefined);
       setDetailData(res);
     } catch (err: any) {
-      setDetailError(err.message || 'Failed to load incident detail');
+      if (err.message?.includes('expired') || err.message?.includes('token')) {
+        setDetailError('Your session has expired. Please sign in again.');
+      } else {
+        setDetailError(err.message || 'Failed to load incident details');
+      }
     } finally {
       setDetailLoading(false);
     }
@@ -89,42 +130,105 @@ export const IncidentsPage: React.FC = () => {
   const closeDrawer = () => {
     setSelectedIncidentId(null);
     setDetailData(null);
+    setAiIntel(null);
+    setActionFeedback(null);
   };
 
-  const getSeverityBadgeClass = (severity: string) => {
-    switch (severity.toUpperCase()) {
-      case 'CRITICAL':
-        return 'bg-red-100 text-red-800 border-red-200';
-      case 'HIGH':
-        return 'bg-orange-100 text-orange-800 border-orange-200';
-      case 'MEDIUM':
-        return 'bg-amber-100 text-amber-800 border-amber-200';
-      case 'LOW':
-        return 'bg-emerald-100 text-emerald-800 border-emerald-200';
-      default:
-        return 'bg-slate-100 text-slate-800 border-slate-200';
+  const handleGenerateAIIntelligence = async (forceRefresh: boolean = true) => {
+    if (!selectedIncidentId) return;
+    try {
+      setAiIntelLoading(true);
+      setAiIntelError(null);
+      try {
+        const aiRec = await generateIncidentAIIntelligence(selectedIncidentId, forceRefresh, token || undefined);
+        if (aiRec.status === 'FAILED') {
+          setAiIntelError(aiRec.error_info?.error || 'Local Ollama AI generation failed.');
+        }
+      } catch (aiErr: any) {
+        setAiIntelError(aiErr.message || 'Local Ollama AI did not respond within configured timeout.');
+      }
+      const res = await fetchIncidentIntelligence(selectedIncidentId, token || undefined);
+      setAiIntel(res);
+    } catch (err: any) {
+      setAiIntelError(err.message || 'Local AI intelligence generation failed');
+    } finally {
+      setAiIntelLoading(false);
     }
   };
 
-  const getStatusBadgeClass = (status: string) => {
-    switch (status.toUpperCase()) {
-      case 'OPEN':
-        return 'bg-red-50 text-red-700 border-red-200';
-      case 'IN_PROGRESS':
-        return 'bg-blue-50 text-blue-700 border-blue-200';
-      case 'RESOLVED':
-        return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+  const handleStartInvestigation = async (id: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    try {
+      await startInvestigation(id, token || undefined);
+    } catch (err) {
+      // Proceed even if investigation is already active
+    }
+    navigate(`/investigations?incident_id=${id}`);
+  };
+
+  const handleResolveIncident = async () => {
+    if (!selectedIncidentId) return;
+    try {
+      setResolving(true);
+      setActionFeedback(null);
+      await resolveIncident(selectedIncidentId, token || undefined);
+      setActionFeedback('Incident resolved successfully. Status and audit log updated.');
+      
+      // Invalidate queries so Dashboard and Analytics auto-update
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['incidents'] });
+      queryClient.invalidateQueries({ queryKey: ['analytics'] });
+
+      // Refresh detail data & main list
+      const updatedDetail = await fetchIncidentById(selectedIncidentId, token || undefined);
+      setDetailData(updatedDetail);
+      await loadIncidents();
+    } catch (err: any) {
+      setActionFeedback(`Resolution failed: ${err.message}`);
+    } finally {
+      setResolving(false);
+    }
+  };
+
+  const handleTriggerResponseAction = async (actionType: string, targetType: string, targetId: string) => {
+    try {
+      setActionLoading(true);
+      setActionFeedback(null);
+      const actionRec = await createResponseActionApi({
+        action_type: actionType,
+        target_entity_type: targetType,
+        target_entity_id: targetId,
+        reason: `Controlled sandbox action ${actionType} initiated from Incident Details UI`
+      });
+      setActionFeedback(`Response action ${actionRec.action_type} created (Status: ${actionRec.status}). Audit log entry generated.`);
+    } catch (err: any) {
+      setActionFeedback(`Action failed: ${err.message}`);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const getSeverityBadgeClass = (severity: string) => {
+    switch (severity?.toUpperCase()) {
+      case 'CRITICAL':
+        return 'bg-red-500 text-white';
+      case 'HIGH':
+        return 'bg-orange-500 text-white';
+      case 'MEDIUM':
+        return 'bg-amber-400 text-slate-900';
+      case 'LOW':
+        return 'bg-emerald-500 text-white';
       default:
-        return 'bg-slate-50 text-slate-700 border-slate-200';
+        return 'bg-slate-500 text-white';
     }
   };
 
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Incidents & Cases Management"
-        subtitle="Correlated incident group overview and evidence-backed triage workflow"
-        phaseBadge="Phase 12 Complete"
+        title="Incidents"
+        subtitle="View, investigate, and manage correlated security incidents."
+        phaseBadge="SOC Operations"
         breadcrumbs={[{ label: 'CyberScope' }, { label: 'Incidents' }]}
       />
 
@@ -137,11 +241,10 @@ export const IncidentsPage: React.FC = () => {
               <span>Filter By:</span>
             </div>
 
-            {/* Status Selector */}
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="text-xs bg-white border border-slate-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand-500 text-slate-700 font-medium"
+              className="text-xs bg-white border border-slate-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-700 font-medium"
             >
               <option value="">All Statuses</option>
               <option value="OPEN">OPEN</option>
@@ -149,11 +252,10 @@ export const IncidentsPage: React.FC = () => {
               <option value="RESOLVED">RESOLVED</option>
             </select>
 
-            {/* Severity Selector */}
             <select
               value={severityFilter}
               onChange={(e) => setSeverityFilter(e.target.value)}
-              className="text-xs bg-white border border-slate-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand-500 text-slate-700 font-medium"
+              className="text-xs bg-white border border-slate-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-700 font-medium"
             >
               <option value="">All Severities</option>
               <option value="CRITICAL">CRITICAL</option>
@@ -170,7 +272,7 @@ export const IncidentsPage: React.FC = () => {
             <button
               onClick={loadIncidents}
               disabled={loading}
-              className="flex items-center space-x-1 text-xs bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 px-3 py-1.5 rounded-lg transition-colors font-medium"
+              className="flex items-center space-x-1 text-xs bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 px-3 py-1.5 rounded-lg transition-colors font-medium cursor-pointer"
             >
               <RefreshCw className={`h-3.5 w-3.5 text-slate-500 ${loading ? 'animate-spin' : ''}`} />
               <span>Refresh</span>
@@ -179,38 +281,41 @@ export const IncidentsPage: React.FC = () => {
         </div>
       </Card>
 
-      {/* Main Incidents Table */}
-      <Card title="Correlated Incidents" subtitle="Multi-alert incident groups created by CyberScope Correlation Engine" headerStyle="green">
+      {/* Main Incidents Table Card */}
+      <Card title={`All Incidents (${incidents?.length || total})`} headerStyle="default">
         {error && (
-          <div className="p-4 mb-4 bg-red-50 border border-red-200 text-red-700 rounded-lg text-xs">
-            {error}
+          <div className="p-4 mb-4 bg-red-50 border border-red-200 text-red-700 rounded-lg text-xs flex items-center justify-between">
+            <span>{error}</span>
+            <button
+              onClick={loadIncidents}
+              className="px-2.5 py-1 bg-red-100 hover:bg-red-200 text-red-800 rounded text-[11px] font-semibold transition-colors"
+            >
+              Retry
+            </button>
           </div>
         )}
 
         {loading ? (
           <div className="py-12 text-center text-slate-500 text-xs">
-            <RefreshCw className="h-6 w-6 animate-spin mx-auto mb-2 text-brand-600" />
-            Loading correlated incidents...
+            <RefreshCw className="h-6 w-6 animate-spin mx-auto mb-2 text-emerald-600" />
+            Loading incidents...
           </div>
         ) : incidents.length === 0 ? (
           <div className="py-12 text-center text-slate-500 text-xs">
             <ShieldAlert className="h-8 w-8 mx-auto mb-2 text-slate-400" />
-            No correlated incidents found matching current filters.
+            No correlated incidents found.
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse text-xs">
               <thead>
-                <tr className="border-b border-slate-200 bg-slate-50 text-slate-600 font-semibold uppercase tracking-wider">
-                  <th className="py-3 px-4">Incident Number</th>
-                  <th className="py-3 px-4">Title / Summary</th>
-                  <th className="py-3 px-4">Severity</th>
-                  <th className="py-3 px-4">Status</th>
-                  <th className="py-3 px-4">Risk Score</th>
-                  <th className="py-3 px-4">Confidence</th>
-                  <th className="py-3 px-4 text-center">Correlated Alerts</th>
-                  <th className="py-3 px-4">Created Time</th>
-                  <th className="py-3 px-4 text-right">Action</th>
+                <tr className="border-b border-slate-200 bg-slate-50/70 text-slate-500 font-semibold text-[11px]">
+                  <th className="py-2.5 px-3">Reason</th>
+                  <th className="py-2.5 px-3">Severity</th>
+                  <th className="py-2.5 px-3">Status</th>
+                  <th className="py-2.5 px-3">Created</th>
+                  <th className="py-2.5 px-3">Updated</th>
+                  <th className="py-2.5 px-3 text-right">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -218,66 +323,42 @@ export const IncidentsPage: React.FC = () => {
                   <tr
                     key={inc.id}
                     onClick={() => handleSelectIncident(inc.id)}
-                    className="hover:bg-slate-50/80 cursor-pointer transition-colors"
+                    className="hover:bg-slate-50 cursor-pointer transition-colors"
                   >
-                    <td className="py-3 px-4 font-mono font-bold text-brand-700">
-                      {inc.incident_number}
+                    <td className="py-3 px-3 max-w-md">
+                      <div className="font-bold text-slate-900 leading-snug">{inc.title}</div>
+                      <div className="text-[11px] text-slate-500 font-normal truncate mt-0.5">{inc.summary}</div>
                     </td>
-                    <td className="py-3 px-4 max-w-xs">
-                      <div className="font-semibold text-slate-900 truncate">{inc.title}</div>
-                      <div className="text-slate-500 text-[11px] truncate">{inc.summary}</div>
-                    </td>
-                    <td className="py-3 px-4">
-                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${getSeverityBadgeClass(inc.severity)}`}>
+                    <td className="py-3 px-3">
+                      <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold ${getSeverityBadgeClass(inc.severity)}`}>
                         {inc.severity}
                       </span>
                     </td>
-                    <td className="py-3 px-4">
-                      <span className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${getStatusBadgeClass(inc.status)}`}>
+                    <td className="py-3 px-3">
+                      <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-medium border ${
+                        inc.status === 'OPEN'
+                          ? 'bg-red-50 text-rose-700 border-red-200'
+                          : inc.status === 'IN_PROGRESS'
+                          ? 'bg-blue-50 text-blue-700 border-blue-200'
+                          : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                      }`}>
                         {inc.status}
                       </span>
                     </td>
-                    <td className="py-3 px-4">
-                      <div className="flex items-center space-x-2">
-                        <div className="w-12 bg-slate-100 rounded-full h-1.5 overflow-hidden">
-                          <div
-                            className={`h-full ${inc.risk_score >= 70 ? 'bg-red-500' : inc.risk_score >= 40 ? 'bg-amber-500' : 'bg-emerald-500'}`}
-                            style={{ width: `${inc.risk_score}%` }}
-                          />
-                        </div>
-                        <span className="font-bold text-slate-700">{inc.risk_score}/100</span>
-                      </div>
+                    <td className="py-3 px-3 text-slate-500 text-[11px] font-mono whitespace-nowrap">
+                      {formatRelativeTime(inc.created_at)}
                     </td>
-                    <td className="py-3 px-4">
-                      <span className="font-semibold text-slate-700">{inc.confidence_score}%</span>
+                    <td className="py-3 px-3 text-slate-500 text-[11px] font-mono whitespace-nowrap">
+                      {formatRelativeTime(inc.updated_at || inc.created_at)}
                     </td>
-                    <td className="py-3 px-4 text-center">
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-brand-50 text-brand-800 border border-brand-200">
-                        <Layers className="h-3 w-3 mr-1" />
-                        {inc.correlated_alert_count}
-                      </span>
-                    </td>
-                    <td className="py-3 px-4 text-slate-500 text-[11px]">
-                      {inc.created_at ? new Date(inc.created_at).toLocaleString() : 'N/A'}
-                    </td>
-                    <td className="py-3 px-4 text-right">
+                    <td className="py-3 px-3 text-right">
                       <div className="flex items-center justify-end space-x-2">
                         <button
                           onClick={(e) => handleStartInvestigation(inc.id, e)}
-                          className="inline-flex items-center space-x-1 text-xs bg-brand-50 hover:bg-brand-100 text-brand-800 border border-brand-200 px-2.5 py-1 rounded font-semibold transition-colors"
+                          className="inline-flex items-center space-x-1 text-xs bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 px-2.5 py-1 rounded-md font-semibold transition-colors cursor-pointer"
                         >
                           <Search className="h-3.5 w-3.5" />
                           <span>Investigate</span>
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleSelectIncident(inc.id);
-                          }}
-                          className="inline-flex items-center text-xs text-slate-600 hover:text-slate-900 font-semibold px-2 py-1"
-                        >
-                          <span>View</span>
-                          <ChevronRight className="h-4 w-4 ml-0.5" />
                         </button>
                       </div>
                     </td>
@@ -289,45 +370,72 @@ export const IncidentsPage: React.FC = () => {
         )}
       </Card>
 
-      {/* Incident Detail Drawer */}
+      {/* INCIDENT DETAILS DASHBOARD MODAL — STRICT REFERENCE 1 IMPLEMENTATION */}
       {selectedIncidentId && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex justify-end">
-          <div className="w-full max-w-3xl bg-white h-full shadow-2xl overflow-y-auto flex flex-col border-l border-slate-200">
-            {/* Drawer Header */}
-            <div className="p-5 border-b border-slate-200 bg-slate-50 flex items-start justify-between">
-              <div>
-                <div className="flex items-center space-x-2">
-                  <span className="font-mono text-sm font-bold text-brand-700">
-                    {detailData?.incident_number || 'Loading...'}
-                  </span>
-                  {detailData && (
-                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${getSeverityBadgeClass(detailData.severity)}`}>
-                      {detailData.severity}
-                    </span>
-                  )}
-                  {detailData && (
-                    <span className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${getStatusBadgeClass(detailData.status)}`}>
-                      {detailData.status}
-                    </span>
-                  )}
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
+          <div className="w-full max-w-4xl bg-slate-100 rounded-2xl shadow-2xl border border-slate-300 overflow-hidden flex flex-col my-auto max-h-[92vh]">
+
+            {/* A. HEADER */}
+            <div className="bg-white p-5 sm:p-6 border-b border-slate-200 space-y-3 sticky top-0 z-20">
+              <div className="flex items-start justify-between">
+                <div className="space-y-0.5">
+                  <div className="flex items-center space-x-2">
+                    <AlertTriangle className="h-5 w-5 text-amber-500 shrink-0" />
+                    <h2 className="text-xl font-extrabold text-slate-900 tracking-tight">Incident Details</h2>
+                  </div>
+                  <p className="text-xs text-slate-500">
+                    View incident details, AI analysis, and take containment actions.
+                  </p>
                 </div>
-                <h3 className="text-base font-bold text-slate-900 mt-1">
-                  {detailData?.title || 'Incident Details'}
-                </h3>
+
+                <button
+                  onClick={closeDrawer}
+                  className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-200 rounded-full transition-colors cursor-pointer"
+                  title="Close Details"
+                >
+                  <X className="h-5 w-5" />
+                </button>
               </div>
-              <button
-                onClick={closeDrawer}
-                className="p-1 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-200/50 transition-colors"
-              >
-                <X className="h-5 w-5" />
-              </button>
+
+              {/* B. STATUS / SEVERITY BADGES */}
+              {detailData && (
+                <div className="flex flex-wrap items-center gap-2 pt-1">
+                  <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase border shadow-sm ${
+                    detailData.severity === 'CRITICAL' || detailData.severity === 'HIGH'
+                      ? 'bg-orange-500 text-white border-orange-600'
+                      : detailData.severity === 'MEDIUM'
+                      ? 'bg-amber-100 text-amber-900 border-amber-300'
+                      : 'bg-emerald-100 text-emerald-900 border-emerald-300'
+                  }`}>
+                    {detailData.severity}
+                  </span>
+
+                  <span className={`px-3 py-1 rounded-full text-xs font-bold border shadow-sm ${
+                    detailData.status === 'OPEN'
+                      ? 'bg-rose-50 text-rose-800 border-rose-200'
+                      : detailData.status === 'IN_PROGRESS'
+                      ? 'bg-amber-50 text-amber-800 border-amber-200'
+                      : 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                  }`}>
+                    {detailData.status}
+                  </span>
+
+                  <span className="px-3 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-700 border border-slate-300 shadow-sm">
+                    Auto-correlated
+                  </span>
+
+                  <span className="px-3 py-1 rounded-full text-xs font-mono font-bold bg-slate-100 text-slate-800 border border-slate-300 shadow-sm">
+                    {detailData.incident_number || detailData.id}
+                  </span>
+                </div>
+              )}
             </div>
 
-            {/* Drawer Content */}
-            <div className="p-6 space-y-6 flex-1">
+            {/* Scrollable Content Workspace */}
+            <div className="p-6 overflow-y-auto space-y-6 flex-1 text-xs text-slate-800 bg-slate-50">
               {detailLoading ? (
                 <div className="py-16 text-center text-slate-500 text-xs">
-                  <RefreshCw className="h-6 w-6 animate-spin mx-auto mb-2 text-brand-600" />
+                  <RefreshCw className="h-6 w-6 animate-spin mx-auto mb-2 text-emerald-600" />
                   Loading incident evidence & timeline...
                 </div>
               ) : detailError ? (
@@ -335,194 +443,282 @@ export const IncidentsPage: React.FC = () => {
                   {detailError}
                 </div>
               ) : detailData ? (
-                <>
-                  {/* Summary & Metrics */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl">
-                      <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Derived Risk Score</div>
-                      <div className="text-xl font-bold text-slate-900 mt-1">{detailData.risk_score} <span className="text-xs font-normal text-slate-500">/ 100</span></div>
-                      <div className="w-full bg-slate-200 h-1.5 rounded-full mt-2 overflow-hidden">
-                        <div className={`h-full ${detailData.risk_score >= 70 ? 'bg-red-500' : 'bg-amber-500'}`} style={{ width: `${detailData.risk_score}%` }} />
+                <div className="bg-white rounded-xl shadow border border-slate-200 p-6 sm:p-8 space-y-6">
+
+                  {/* Action Feedback Banner */}
+                  {actionFeedback && (
+                    <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg text-xs flex items-center justify-between font-medium">
+                      <div className="flex items-center space-x-2">
+                        <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+                        <span>{actionFeedback}</span>
+                      </div>
+                      <button onClick={() => setActionFeedback(null)} className="text-emerald-600 hover:text-emerald-800">
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  )}
+
+                  {/* C. INCIDENT INFORMATION (2-Column Key/Value Grid) */}
+                  <div className="bg-slate-50/70 border border-slate-200 rounded-xl p-5 space-y-3">
+                    <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider border-b border-slate-200 pb-2">
+                      Incident Information
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-y-3 gap-x-8 text-xs">
+                      <div className="flex items-start justify-between border-b border-slate-200/60 pb-2">
+                        <span className="text-slate-500 font-medium shrink-0 pr-4">Reason</span>
+                        <span className="font-bold text-slate-900 text-right">{detailData.title}</span>
+                      </div>
+                      <div className="flex items-start justify-between border-b border-slate-200/60 pb-2">
+                        <span className="text-slate-500 font-medium shrink-0 pr-4">Trigger Rule</span>
+                        <span className="font-bold text-slate-900 text-right">
+                          {detailData.correlation_explanation?.matched_signals?.[0]?.detail || detailData.title}
+                        </span>
+                      </div>
+                      <div className="flex items-start justify-between border-b border-slate-200/60 pb-2">
+                        <span className="text-slate-500 font-medium shrink-0 pr-4">Correlation Drivers</span>
+                        <span className="font-medium text-slate-700 text-right">
+                          {detailData.correlation_explanation?.summary || 'Multi-signal alert cluster correlation'}
+                        </span>
+                      </div>
+                      <div className="flex items-start justify-between border-b border-slate-200/60 pb-2">
+                        <span className="text-slate-500 font-medium shrink-0 pr-4">Incident ID</span>
+                        <span className="font-mono font-bold text-slate-900">{detailData.incident_number || detailData.id}</span>
+                      </div>
+                      <div className="flex items-start justify-between border-b border-slate-200/60 pb-2">
+                        <span className="text-slate-500 font-medium shrink-0 pr-4">Created</span>
+                        <span className="font-mono text-slate-800">{new Date(detailData.created_at).toLocaleString()}</span>
+                      </div>
+                      <div className="flex items-start justify-between border-b border-slate-200/60 pb-2">
+                        <span className="text-slate-500 font-medium shrink-0 pr-4">Last Updated</span>
+                        <span className="font-mono text-slate-600">{formatRelativeTime(detailData.updated_at || detailData.created_at)}</span>
+                      </div>
+                      <div className="flex items-start justify-between border-b border-slate-200/60 pb-2 md:col-span-2">
+                        <span className="text-slate-500 font-medium shrink-0 pr-4">Resolved At</span>
+                        <span className="font-mono font-semibold text-slate-800">
+                          {detailData.status === 'RESOLVED' ? new Date(detailData.updated_at).toLocaleString() : 'Not resolved'}
+                        </span>
                       </div>
                     </div>
+                  </div>
 
-                    <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl">
-                      <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Derived Confidence</div>
-                      <div className="text-xl font-bold text-slate-900 mt-1">{detailData.confidence_score}%</div>
-                      <div className="w-full bg-slate-200 h-1.5 rounded-full mt-2 overflow-hidden">
-                        <div className="h-full bg-brand-600" style={{ width: `${detailData.confidence_score}%` }} />
+                  {/* D. AI INVESTIGATION CALLOUT */}
+                  <div className="bg-blue-50/80 border border-blue-200 rounded-xl p-5 space-y-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div className="flex items-start space-x-3">
+                        <div className="p-2 bg-blue-100 text-blue-700 rounded-lg shrink-0 mt-0.5">
+                          <Info className="h-5 w-5 text-blue-600" />
+                        </div>
+                        <div>
+                          <h4 className="text-xs font-bold text-blue-950 uppercase tracking-wider">AI Incident Intelligence</h4>
+                          <p className="text-xs text-blue-900 mt-0.5 leading-relaxed font-medium">
+                            Click 'Start Investigation' below to generate AI incident intelligence with attack patterns, business impact, and containment steps.
+                          </p>
+                        </div>
                       </div>
+                      <button
+                        onClick={() => handleGenerateAIIntelligence(true)}
+                        disabled={aiIntelLoading}
+                        className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-lg shadow-sm transition-colors flex items-center justify-center space-x-1.5 shrink-0 cursor-pointer"
+                      >
+                        <Sparkles className={`h-4 w-4 ${aiIntelLoading ? 'animate-spin' : ''}`} />
+                        <span>{aiIntelLoading ? 'Generating AI Intel...' : 'Generate AI Investigation'}</span>
+                      </button>
                     </div>
 
-                    <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl">
-                      <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Correlated Alerts</div>
-                      <div className="text-xl font-bold text-slate-900 mt-1">{detailData.correlated_alerts.length}</div>
-                      <div className="text-[11px] text-slate-500 mt-1">Multi-signal evidence cluster</div>
-                    </div>
+                    {aiIntelError && (
+                      <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-xs">
+                        {aiIntelError}
+                      </div>
+                    )}
+
+                    {aiIntel && (
+                      <div className="mt-3 p-4 bg-white border border-blue-200 rounded-xl space-y-3 text-xs text-slate-800 shadow-2xs">
+                        <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                          <span className="font-bold text-slate-900 text-xs">AI Evidence-Backed Narrative</span>
+                          <span className="text-[10px] font-mono bg-blue-50 text-blue-700 px-2 py-0.5 rounded border border-blue-200">Local Ollama (llama3)</span>
+                        </div>
+                        <div>
+                          <span className="font-bold text-slate-800 block mb-1">What Happened:</span>
+                          <p className="text-slate-700 leading-relaxed bg-slate-50 p-3 rounded-lg border border-slate-200">{aiIntel.what_happened}</p>
+                        </div>
+                        <div>
+                          <span className="font-bold text-slate-800 block mb-1">Why It's Risky:</span>
+                          <p className="text-slate-700 leading-relaxed bg-slate-50 p-3 rounded-lg border border-slate-200">{aiIntel.why_suspicious?.summary || 'Correlated security events across network indicators.'}</p>
+                        </div>
+                        <div>
+                          <span className="font-bold text-slate-800 block mb-1">Potential Impact:</span>
+                          <p className="text-slate-700 leading-relaxed bg-slate-50 p-3 rounded-lg border border-slate-200">{aiIntel.potential_impact?.summary || 'Unauthorized access or privilege escalation risk.'}</p>
+                        </div>
+                        <div>
+                          <span className="font-bold text-slate-800 block mb-1">Recommended Response:</span>
+                          <p className="text-slate-700 leading-relaxed bg-slate-50 p-3 rounded-lg border border-slate-200">{aiIntel.recommendations_placeholder || 'Block IP, disable compromised user credentials, and isolate host asset.'}</p>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
-                  {/* Summary Text */}
-                  <div className="p-4 bg-white border border-slate-200 rounded-xl">
-                    <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-1">Incident Summary</h4>
-                    <p className="text-xs text-slate-700 leading-relaxed">{detailData.summary}</p>
-                  </div>
-
-                  {/* AI Callout Banner matching Reference Image 5 */}
-                  <div className="p-3.5 bg-blue-50/80 border border-blue-200 rounded-xl flex items-center space-x-3 text-xs text-blue-900 font-medium">
-                    <Info className="h-5 w-5 text-blue-600 shrink-0" />
-                    <span>Click <strong>"Start Investigation"</strong> below to generate AI Incident Intelligence with attack patterns, business impact, and containment steps.</span>
-                  </div>
-
-                  {/* Action Panel Card matching Reference Image 5 */}
-                  <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
+                  {/* E & F. ACTION PANEL (Block IP, Disable User, Confirm Containment + Start Investigation / Resolve Incident) */}
+                  <div className="bg-slate-50 border border-slate-200 rounded-xl p-5 space-y-4">
                     <div className="flex items-center justify-between">
-                      <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center space-x-1.5">
-                        <Shield className="h-4 w-4 text-amber-600" />
+                      <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center space-x-2">
+                        <AlertTriangle className="h-4 w-4 text-amber-600" />
                         <span>Action Panel</span>
                       </h4>
-                      <span className="text-[10px] font-semibold text-slate-500 bg-white px-2 py-0.5 rounded border border-slate-200">Controlled Sandbox Actions</span>
+                      <span className="text-[10px] font-bold text-slate-600 bg-white px-2.5 py-1 rounded-full border border-slate-200 shadow-2xs">
+                        Controlled actions
+                      </span>
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                       <button
-                        onClick={() => navigate(`/response?action=block_ip`)}
-                        className="p-3 bg-white hover:bg-slate-100 border border-slate-200 rounded-lg text-left transition-colors space-y-1 group"
+                        onClick={() => handleTriggerResponseAction('BLOCK_IP', 'IP_ADDRESS', detailData.correlated_alerts?.[0]?.source_ip || '192.168.1.100')}
+                        disabled={actionLoading}
+                        className="p-4 bg-white hover:bg-slate-100/80 border border-slate-200 rounded-xl text-left transition-colors space-y-1.5 group cursor-pointer shadow-2xs"
                       >
-                        <div className="flex items-center space-x-1.5 font-bold text-slate-900 text-xs group-hover:text-brand-700">
-                          <Lock className="h-3.5 w-3.5 text-slate-500" />
+                        <div className="flex items-center space-x-2 font-bold text-slate-900 text-xs group-hover:text-brand-700">
+                          <Ban className="h-4 w-4 text-rose-600 shrink-0" />
                           <span>Block IP</span>
                         </div>
-                        <p className="text-[10px] text-slate-500 leading-tight">Block the source IP address at the perimeter firewall</p>
+                        <p className="text-[11px] text-slate-500 leading-normal">
+                          Block the source IP address at the firewall
+                        </p>
                       </button>
 
                       <button
-                        onClick={() => navigate(`/response?action=disable_user`)}
-                        className="p-3 bg-white hover:bg-slate-100 border border-slate-200 rounded-lg text-left transition-colors space-y-1 group"
+                        onClick={() => handleTriggerResponseAction('DISABLE_USER', 'USER_ACCOUNT', detailData.correlated_alerts?.[0]?.user_context || 'compromised_user')}
+                        disabled={actionLoading}
+                        className="p-4 bg-white hover:bg-slate-100/80 border border-slate-200 rounded-xl text-left transition-colors space-y-1.5 group cursor-pointer shadow-2xs"
                       >
-                        <div className="flex items-center space-x-1.5 font-bold text-slate-900 text-xs group-hover:text-brand-700">
-                          <UserX className="h-3.5 w-3.5 text-slate-500" />
+                        <div className="flex items-center space-x-2 font-bold text-slate-900 text-xs group-hover:text-brand-700">
+                          <UserX className="h-4 w-4 text-amber-600 shrink-0" />
                           <span>Disable User</span>
                         </div>
-                        <p className="text-[10px] text-slate-500 leading-tight">Disable compromised user account credentials</p>
+                        <p className="text-[11px] text-slate-500 leading-normal">
+                          Disable the compromised user account
+                        </p>
                       </button>
 
                       <button
-                        onClick={() => navigate(`/response?action=confirm_containment`)}
-                        className="p-3 bg-white hover:bg-slate-100 border border-slate-200 rounded-lg text-left transition-colors space-y-1 group"
+                        onClick={() => handleTriggerResponseAction('ISOLATE_HOST', 'HOST', detailData.correlated_alerts?.[0]?.asset_context || 'workstation-01')}
+                        disabled={actionLoading}
+                        className="p-4 bg-white hover:bg-slate-100/80 border border-slate-200 rounded-xl text-left transition-colors space-y-1.5 group cursor-pointer shadow-2xs"
                       >
-                        <div className="flex items-center space-x-1.5 font-bold text-slate-900 text-xs group-hover:text-brand-700">
-                          <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+                        <div className="flex items-center space-x-2 font-bold text-slate-900 text-xs group-hover:text-brand-700">
+                          <ShieldCheck className="h-4 w-4 text-emerald-600 shrink-0" />
                           <span>Confirm Containment</span>
                         </div>
-                        <p className="text-[10px] text-slate-500 leading-tight">Confirm threat has been isolated and contained</p>
+                        <p className="text-[11px] text-slate-500 leading-normal">
+                          Confirm whether containment has been completed
+                        </p>
                       </button>
                     </div>
 
-                    <div className="pt-2 flex items-center space-x-2">
+                    <div className="pt-2 flex flex-col sm:flex-row items-center gap-3">
                       <button
                         onClick={(e) => handleStartInvestigation(detailData.id, e)}
-                        className="flex-1 py-2 bg-brand-600 hover:bg-brand-700 text-white font-bold text-xs rounded-lg shadow-sm transition-colors flex items-center justify-center space-x-1.5"
+                        className="w-full sm:flex-1 py-2.5 bg-brand-700 hover:bg-brand-800 text-white font-bold text-xs rounded-lg shadow-sm transition-colors flex items-center justify-center space-x-2 cursor-pointer"
                       >
-                        <Search className="h-3.5 w-3.5" />
+                        <Search className="h-4 w-4" />
                         <span>Start Investigation</span>
                       </button>
 
                       {detailData.status !== 'RESOLVED' && (
                         <button
-                          onClick={() => navigate(`/response?incident_id=${detailData.id}`)}
-                          className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg shadow-sm transition-colors flex items-center justify-center space-x-1.5"
+                          onClick={handleResolveIncident}
+                          disabled={resolving}
+                          className="w-full sm:flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg shadow-sm transition-colors flex items-center justify-center space-x-2 cursor-pointer"
                         >
-                          <CheckCircle2 className="h-3.5 w-3.5" />
-                          <span>Resolve Incident</span>
+                          <CheckCircle2 className={`h-4 w-4 ${resolving ? 'animate-spin' : ''}`} />
+                          <span>{resolving ? 'Resolving Incident...' : 'Resolve Incident'}</span>
                         </button>
                       )}
                     </div>
                   </div>
 
-                  {/* Correlation Explanation Card */}
-                  <div className="p-4 bg-brand-50/50 border border-brand-200 rounded-xl space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-2">
-                        <Activity className="h-4 w-4 text-brand-700" />
-                        <h4 className="text-xs font-bold text-brand-900 uppercase tracking-wider">Deterministic Correlation Explanation</h4>
-                      </div>
-                      <span className="text-xs font-bold text-brand-800 bg-brand-100 px-2 py-0.5 rounded border border-brand-300">
-                        Score: {detailData.correlation_explanation.correlation_score}/100
-                      </span>
-                    </div>
-
-                    <p className="text-xs text-slate-700 leading-relaxed">
-                      {detailData.correlation_explanation.summary}
-                    </p>
-
-                    {detailData.correlation_explanation.matched_signals.length > 0 && (
-                      <div className="space-y-1.5 mt-2">
-                        <div className="text-[11px] font-bold text-slate-700">Matched Correlation Signals:</div>
-                        <div className="space-y-1">
-                          {detailData.correlation_explanation.matched_signals.map((sig, idx) => (
-                            <div key={idx} className="flex items-start space-x-2 text-[11px] bg-white p-2 rounded border border-slate-200">
-                              <span className="font-semibold text-brand-800 shrink-0">+{sig.weight} pts</span>
-                              <span className="text-slate-600 font-mono text-[10px] uppercase bg-slate-100 px-1 rounded">{sig.signal_type}</span>
-                              <span className="text-slate-700">{sig.detail}</span>
+                  {/* G. ACTIVITY TIMELINE */}
+                  <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-4">
+                    <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider border-b border-slate-100 pb-2">
+                      Activity Timeline ({detailData.timeline?.length || 0})
+                    </h4>
+                    {detailData.timeline && detailData.timeline.length > 0 ? (
+                      <div className="relative pl-4 border-l-2 border-slate-200 ml-2 space-y-4 py-1">
+                        {detailData.timeline.map((evt) => (
+                          <div key={evt.id} className="relative">
+                            <div className="absolute -left-[21px] top-1 h-3 w-3 rounded-full bg-brand-600 ring-4 ring-white border border-brand-700" />
+                            <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 space-y-1 shadow-2xs">
+                              <div className="flex items-center justify-between font-bold text-xs">
+                                <span className="text-slate-900 font-mono">{evt.event_type}</span>
+                                <span className="text-[10px] text-slate-400 font-mono">{new Date(evt.timestamp).toLocaleString()}</span>
+                              </div>
+                              <p className="text-slate-700 text-xs leading-relaxed">{evt.description}</p>
                             </div>
-                          ))}
-                        </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="p-4 text-center text-slate-500 text-xs bg-slate-50 rounded-lg">
+                        No activity timeline logged yet.
                       </div>
                     )}
-
-                    <div className="text-[10px] text-slate-500 italic pt-1 border-t border-brand-200/60">
-                      Correlation measures multi-signal event similarity and temporal proximity. It provides evidence grouping and does NOT prove compromise.
-                    </div>
                   </div>
 
-                  {/* Correlated Alerts List */}
-                  <div className="space-y-3">
-                    <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider">Correlated Security Alerts</h4>
-                    <div className="space-y-2">
-                      {detailData.correlated_alerts.map((al) => (
-                        <div key={al.id} className="p-3 bg-white border border-slate-200 rounded-lg space-y-1 hover:border-slate-300 transition-colors">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center space-x-2">
-                              <span className="font-mono text-xs font-bold text-brand-700">{al.alert_code}</span>
-                              <span className="text-xs font-semibold text-slate-900">{al.event_type}</span>
-                              <span className={`px-1.5 py-0.25 rounded text-[9px] font-bold border ${getSeverityBadgeClass(al.severity)}`}>
-                                {al.severity}
-                              </span>
-                            </div>
-                            <span className="text-[11px] text-slate-500">{new Date(al.timestamp).toLocaleString()}</span>
-                          </div>
-
-                          <div className="flex flex-wrap items-center gap-3 text-[11px] text-slate-600 pt-1">
-                            {al.user_context && (
-                              <span className="flex items-center space-x-1"><User className="h-3 w-3 text-slate-400" /><span>{al.user_context}</span></span>
-                            )}
-                            {al.asset_context && (
-                              <span className="flex items-center space-x-1"><HardDrive className="h-3 w-3 text-slate-400" /><span>{al.asset_context}</span></span>
-                            )}
-                            {al.source_ip && (
-                              <span className="font-mono text-[10px] bg-slate-100 px-1 py-0.5 rounded text-slate-700">Src: {al.source_ip}</span>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
+                  {/* H. CORRELATED ALERTS TABLE */}
+                  <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-4">
+                    <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider border-b border-slate-100 pb-2">
+                      Correlated Alerts ({detailData.correlated_alerts?.length || 0})
+                    </h4>
+                    {detailData.correlated_alerts && detailData.correlated_alerts.length > 0 ? (
+                      <div className="overflow-x-auto border border-slate-200 rounded-lg">
+                        <table className="w-full text-left text-xs">
+                          <thead>
+                            <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider text-[11px]">
+                              <th className="py-2.5 px-3">Type</th>
+                              <th className="py-2.5 px-3">Source</th>
+                              <th className="py-2.5 px-3">IP / Entity</th>
+                              <th className="py-2.5 px-3">Severity</th>
+                              <th className="py-2.5 px-3">Time</th>
+                              <th className="py-2.5 px-3 text-right">Action</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100 font-sans">
+                            {detailData.correlated_alerts.map((al) => (
+                              <tr 
+                                key={al.id} 
+                                onClick={() => navigate(`/alerts?id=${al.id}`)}
+                                className="hover:bg-slate-50 cursor-pointer transition-colors"
+                              >
+                                <td className="py-3 px-3 font-semibold text-slate-900">{al.event_type}</td>
+                                <td className="py-3 px-3 text-slate-600 font-mono">{al.alert_code}</td>
+                                <td className="py-3 px-3 font-mono text-slate-700">
+                                  {al.source_ip || al.user_context || al.asset_context || 'N/A'}
+                                </td>
+                                <td className="py-3 px-3">
+                                  <span className={`px-2.5 py-0.5 rounded text-[10px] font-bold ${getSeverityBadgeClass(al.severity)}`}>
+                                    {al.severity}
+                                  </span>
+                                </td>
+                                <td className="py-3 px-3 text-slate-500 text-[11px] font-mono whitespace-nowrap">
+                                  {formatRelativeTime(al.timestamp)}
+                                </td>
+                                <td className="py-3 px-3 text-right">
+                                  <span className="inline-flex items-center text-brand-700 hover:text-brand-900 font-bold">
+                                    <span>View Details</span>
+                                    <ChevronRight className="h-3.5 w-3.5 ml-0.5" />
+                                  </span>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : (
+                      <div className="p-4 text-center text-slate-500 text-xs bg-slate-50 rounded-lg">
+                        No correlated alerts associated with this incident.
+                      </div>
+                    )}
                   </div>
 
-                  {/* Chronological Incident Timeline */}
-                  <div className="space-y-3 pt-2">
-                    <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider">Chronological Incident Timeline</h4>
-                    <div className="relative pl-4 border-l-2 border-slate-200 space-y-4">
-                      {detailData.timeline.map((item) => (
-                        <div key={item.id} className="relative group">
-                          <div className="absolute -left-[21px] top-1 h-2.5 w-2.5 rounded-full bg-brand-600 ring-4 ring-white" />
-                          <div className="text-[11px] font-bold text-slate-800">{item.event_type}</div>
-                          <div className="text-xs text-slate-600 mt-0.5">{item.description}</div>
-                          <div className="text-[10px] text-slate-400 mt-1">{new Date(item.timestamp).toLocaleString()}</div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </>
+                </div>
               ) : null}
             </div>
           </div>

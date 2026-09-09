@@ -1,18 +1,26 @@
 import { DashboardSummaryResponse } from '../types';
+import { API_BASE_URL } from './api';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+export async function fetchDashboardSummary(token?: string): Promise<DashboardSummaryResponse> {
+  const authToken = token || localStorage.getItem('cyberscope_token') || localStorage.getItem('token') || '';
+  const headers: HeadersInit = {
+    'Accept': 'application/json',
+  };
+  if (authToken) {
+    headers['Authorization'] = `Bearer ${authToken}`;
+  }
 
-export async function fetchDashboardSummary(token: string): Promise<DashboardSummaryResponse> {
-  const response = await fetch(`${API_BASE_URL}/api/v1/dashboard/summary`, {
-    headers: {
-      'Authorization': `Bearer ${token}`,
-      'Accept': 'application/json',
-    },
-  });
+  // Primary canonical API route: /api/v1/dashboard/summary
+  let response = await fetch(`${API_BASE_URL}/api/v1/dashboard/summary`, { headers });
+  
+  // Fallback to /dashboard/summary if root route is used
+  if (response.status === 404) {
+    response = await fetch(`${API_BASE_URL}/dashboard/summary`, { headers });
+  }
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.detail || 'Failed to fetch dashboard summary metrics.');
+    throw new Error(errorData.detail || `Failed to fetch dashboard summary metrics (HTTP ${response.status}).`);
   }
 
   return response.json();

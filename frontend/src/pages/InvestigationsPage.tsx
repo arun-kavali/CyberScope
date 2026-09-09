@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { PageHeader } from '../components/PageHeader';
 import { Card } from '../components/Card';
+import { useAuth } from '../context/AuthContext';
 import { 
   Search, 
   User, 
@@ -38,6 +39,7 @@ import {
 } from '../services/aiApi';
 
 export const InvestigationsPage: React.FC = () => {
+  const { token } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const incidentIdParam = searchParams.get('incident_id');
 
@@ -68,7 +70,7 @@ export const InvestigationsPage: React.FC = () => {
 
   const checkOllamaStatus = async () => {
     try {
-      const res = await fetchAIStatus();
+      const res = await fetchAIStatus(token || undefined);
       setAiStatus(res);
     } catch (e: any) {
       setAiStatus({ available: false, mode: 'ollama', model: 'llama3', url: 'http://localhost:11434', reason: 'AI service unreachable' });
@@ -80,7 +82,7 @@ export const InvestigationsPage: React.FC = () => {
     try {
       setAiLoading(true);
       setAiError(null);
-      const rec = await generateInvestigationNarrative(selectedIncidentId, forceRefresh);
+      const rec = await generateInvestigationNarrative(selectedIncidentId, forceRefresh, token || undefined);
       setAiRecord(rec);
       if (rec.status === 'FAILED') {
         setAiError(rec.error_info?.error || 'Local Ollama model execution failed.');
@@ -96,7 +98,7 @@ export const InvestigationsPage: React.FC = () => {
   const loadIncidentsList = async () => {
     try {
       setIncidentsLoading(true);
-      const res = await fetchIncidents(1, 100);
+      const res = await fetchIncidents(1, 100, undefined, undefined, token || undefined);
       setIncidents(res.items);
       
       // Auto-select incident from URL param or default to first incident
@@ -106,7 +108,11 @@ export const InvestigationsPage: React.FC = () => {
         setSelectedIncidentId(res.items[0].id);
       }
     } catch (err: any) {
-      setError(err.message || 'Failed to load incidents');
+      if (err.message?.includes('expired') || err.message?.includes('token')) {
+        setError('Your session has expired. Please sign in again.');
+      } else {
+        setError(err.message || 'Failed to load incidents');
+      }
     } finally {
       setIncidentsLoading(false);
     }
@@ -114,7 +120,7 @@ export const InvestigationsPage: React.FC = () => {
 
   useEffect(() => {
     loadIncidentsList();
-  }, []);
+  }, [token]);
 
   // Load investigation data whenever selected incident changes
   const loadInvestigationData = async (incId: string) => {
@@ -125,8 +131,8 @@ export const InvestigationsPage: React.FC = () => {
       
       // Fetch intelligence summary and timeline in parallel
       const [intelRes, timelineRes] = await Promise.all([
-        fetchIncidentIntelligence(incId),
-        fetchIncidentTimeline(incId)
+        fetchIncidentIntelligence(incId, token || undefined),
+        fetchIncidentTimeline(incId, token || undefined)
       ]);
 
       setIntel(intelRes);
@@ -138,7 +144,11 @@ export const InvestigationsPage: React.FC = () => {
       }
       checkOllamaStatus();
     } catch (err: any) {
-      setError(err.message || 'Failed to load investigation workspace data');
+      if (err.message?.includes('expired') || err.message?.includes('token')) {
+        setError('Your session has expired. Please sign in again.');
+      } else {
+        setError(err.message || 'Failed to load investigation workspace data');
+      }
     } finally {
       setLoading(false);
     }
@@ -149,7 +159,7 @@ export const InvestigationsPage: React.FC = () => {
       setSearchParams({ incident_id: selectedIncidentId });
       loadInvestigationData(selectedIncidentId);
     }
-  }, [selectedIncidentId]);
+  }, [selectedIncidentId, token]);
 
   const handleSelectIncidentChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     setSelectedIncidentId(e.target.value);
@@ -159,7 +169,7 @@ export const InvestigationsPage: React.FC = () => {
     if (!selectedIncidentId) return;
     try {
       setLoading(true);
-      await startInvestigation(selectedIncidentId);
+      await startInvestigation(selectedIncidentId, token || undefined);
       await loadInvestigationData(selectedIncidentId);
       await loadIncidentsList();
     } catch (err: any) {
@@ -176,7 +186,7 @@ export const InvestigationsPage: React.FC = () => {
     try {
       setNoteSubmitting(true);
       setNoteError(null);
-      const res = await addInvestigationNote(selectedIncidentId, noteInput.trim());
+      const res = await addInvestigationNote(selectedIncidentId, noteInput.trim(), token || undefined);
       
       // Update local state with new notes list
       if (intel) {
@@ -227,9 +237,9 @@ export const InvestigationsPage: React.FC = () => {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="SOC Analyst Investigation Workspace"
-        subtitle="Deep evidence canvas, deterministic narrative, chronological timeline, and analyst notes workflow"
-        phaseBadge="Phase 13 Active"
+        title="Investigations"
+        subtitle="Deep evidence investigation workspace, analyst notes, timeline, and AI analysis."
+        phaseBadge="SOC Operations"
         breadcrumbs={[{ label: 'CyberScope' }, { label: 'Investigations' }]}
       />
 
@@ -539,12 +549,27 @@ export const InvestigationsPage: React.FC = () => {
                 </div>
                 <button
                   onClick={() => handleGenerateAINarrative(true)}
-                  className="px-3 py-1 bg-white hover:bg-red-100 border border-red-300 text-red-900 font-semibold rounded-lg shrink-0"
+                  className="px-3 py-1 bg-white hover:bg-red-100 border border-red-300 text-red-900 font-semibold rounded-lg shrink-0 cursor-pointer"
                 >
                   Try Again
                 </button>
               </div>
-            ) : null}
+            ) : (
+              <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between text-xs text-slate-700">
+                <div className="flex items-center space-x-2">
+                  <Sparkles className="h-4 w-4 text-emerald-600" />
+                  <span>Generate evidence-grounded AI narrative and recommendations with local Ollama ({aiStatus?.model || 'llama3'}).</span>
+                </div>
+                <button
+                  onClick={() => handleGenerateAINarrative(true)}
+                  disabled={aiLoading}
+                  className="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-lg shrink-0 transition-colors flex items-center space-x-1 cursor-pointer"
+                >
+                  <Sparkles className="h-3.5 w-3.5" />
+                  <span>Generate AI Narrative</span>
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Main 2-Column Canvas Layout */}

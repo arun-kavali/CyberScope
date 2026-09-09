@@ -46,9 +46,9 @@ def list_reports(
 ):
     """
     Lists generated security reports with server-side pagination.
-    Restricted to SOC_ANALYST.
+    Restricted to SOC_ANALYST. Filters to user-owned reports.
     """
-    items, total = ReportService.list_reports(db=db, page=page, page_size=page_size, report_type=report_type)
+    items, total = ReportService.list_reports(db=db, page=page, page_size=page_size, report_type=report_type, user_id=current_user.id)
     pages = math.ceil(total / page_size) if total > 0 else 1
     return PaginatedReportResponse(
         items=items,
@@ -66,11 +66,13 @@ def get_report(
 ):
     """
     Retrieves report details by ID.
-    Restricted to SOC_ANALYST.
+    Restricted to SOC_ANALYST and the report owner.
     """
     report = ReportService.get_report_by_id(db, report_id)
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
+    if report.generated_by and report.generated_by != current_user.id:
+        raise HTTPException(status_code=403, detail="Access denied to private report")
     return report
 
 @router.get("/{report_id}/download")
@@ -81,10 +83,14 @@ def download_report(
 ):
     """
     Downloads the generated report file (PDF, CSV, or JSON).
-    Restricted to SOC_ANALYST.
+    Restricted to SOC_ANALYST and the report owner.
     """
     report = ReportService.get_report_by_id(db, report_id)
-    if not report or not report.file_path or not os.path.exists(report.file_path):
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+    if report.generated_by and report.generated_by != current_user.id:
+        raise HTTPException(status_code=403, detail="Access denied to private report")
+    if not report.file_path or not os.path.exists(report.file_path):
         raise HTTPException(status_code=404, detail="Report file not found on disk")
 
     file_name = os.path.basename(report.file_path)

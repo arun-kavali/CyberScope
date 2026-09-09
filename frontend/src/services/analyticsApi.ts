@@ -190,110 +190,134 @@ export interface EvidenceDetailRecord {
   created_at: string;
 }
 
-export async function runOperationalAnalyticsApi(token: string, days = 30): Promise<OperationalAnalyticsSummary> {
-  const res = await fetch(`${API_BASE_URL}/analytics/run?days=${days}`, {
+function getAuthHeaders(token?: string): Record<string, string> {
+  const authToken = token || localStorage.getItem('cyberscope_token') || '';
+  return {
+    'Content-Type': 'application/json',
+    ...(authToken ? { Authorization: `Bearer ${authToken}` } : {})
+  };
+}
+
+async function fetchAnalyticsApi(path: string, options: RequestInit = {}): Promise<Response> {
+  // Target canonical /api/v1/analytics route first
+  let res = await fetch(`${API_BASE_URL}/api/v1/analytics${path}`, options);
+  if (res.status === 404) {
+    // Fallback to /analytics route if backend is mounted at root
+    res = await fetch(`${API_BASE_URL}/analytics${path}`, options);
+  }
+  return res;
+}
+
+async function handleResponse<T>(res: Response, fallbackError: string): Promise<T> {
+  if (res.status === 401) {
+    throw new Error('Your session has expired. Please sign in again.');
+  }
+  if (res.status === 403) {
+    throw new Error('Access denied');
+  }
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({ detail: fallbackError }));
+    throw new Error(errorData.detail || fallbackError);
+  }
+  return res.json();
+}
+
+export async function runOperationalAnalyticsApi(token?: string, days = 30): Promise<OperationalAnalyticsSummary> {
+  const res = await fetchAnalyticsApi(`/run?days=${days}`, {
     method: 'POST',
-    headers: { Authorization: `Bearer ${token}` },
+    headers: getAuthHeaders(token),
   });
-  if (!res.ok) throw new Error('Failed to run operational analytics');
-  return res.json();
+  return handleResponse<OperationalAnalyticsSummary>(res, 'Failed to run operational analytics');
 }
 
-export async function getOperationalAnalyticsSummaryApi(token: string, days = 30): Promise<OperationalAnalyticsSummary> {
-  const res = await fetch(`${API_BASE_URL}/analytics/summary?days=${days}`, {
+export async function getOperationalAnalyticsSummaryApi(token?: string, days = 30): Promise<OperationalAnalyticsSummary> {
+  const res = await fetchAnalyticsApi(`/summary?days=${days}`, {
     method: 'GET',
-    headers: { Authorization: `Bearer ${token}` },
+    headers: getAuthHeaders(token),
   });
-  if (!res.ok) throw new Error('Failed to fetch analytics summary');
-  return res.json();
+  return handleResponse<OperationalAnalyticsSummary>(res, 'Failed to fetch analytics summary');
 }
 
-export async function getOperationalFindingsApi(token: string): Promise<OperationalFinding[]> {
-  const res = await fetch(`${API_BASE_URL}/analytics/findings`, {
+export async function getOperationalFindingsApi(token?: string): Promise<OperationalFinding[]> {
+  const res = await fetchAnalyticsApi('/findings', {
     method: 'GET',
-    headers: { Authorization: `Bearer ${token}` },
+    headers: getAuthHeaders(token),
   });
-  if (!res.ok) return [];
-  return res.json();
+  return handleResponse<OperationalFinding[]>(res, 'Failed to fetch operational findings');
 }
 
-export async function getExecutionGapsApi(token: string): Promise<ExecutionGapRecord[]> {
-  const res = await fetch(`${API_BASE_URL}/analytics/execution-gaps`, {
+export async function getExecutionGapsApi(token?: string): Promise<ExecutionGapRecord[]> {
+  const res = await fetchAnalyticsApi('/execution-gaps', {
     method: 'GET',
-    headers: { Authorization: `Bearer ${token}` },
+    headers: getAuthHeaders(token),
   });
-  if (!res.ok) return [];
-  return res.json();
+  return handleResponse<ExecutionGapRecord[]>(res, 'Failed to fetch execution gaps');
 }
 
-export async function getNegativeSpaceApi(token: string): Promise<NegativeSpaceRecord[]> {
-  const res = await fetch(`${API_BASE_URL}/analytics/negative-space`, {
+export async function getNegativeSpaceApi(token?: string): Promise<NegativeSpaceRecord[]> {
+  const res = await fetchAnalyticsApi('/negative-space', {
     method: 'GET',
-    headers: { Authorization: `Bearer ${token}` },
+    headers: getAuthHeaders(token),
   });
-  if (!res.ok) return [];
-  return res.json();
+  return handleResponse<NegativeSpaceRecord[]>(res, 'Failed to fetch negative space findings');
 }
 
-export async function getPeerBenchmarksApi(token: string): Promise<PeerBenchmarkRecord[]> {
-  const res = await fetch(`${API_BASE_URL}/analytics/peer-benchmarks`, {
+export async function getPeerBenchmarksApi(token?: string): Promise<PeerBenchmarkRecord[]> {
+  const res = await fetchAnalyticsApi('/peer-benchmarks', {
     method: 'GET',
-    headers: { Authorization: `Bearer ${token}` },
+    headers: getAuthHeaders(token),
   });
-  if (!res.ok) return [];
-  return res.json();
+  return handleResponse<PeerBenchmarkRecord[]>(res, 'Failed to fetch peer benchmarks');
 }
 
-export async function getOperationalAnomaliesApi(token: string): Promise<OperationalAnomalyRecord[]> {
-  const res = await fetch(`${API_BASE_URL}/analytics/anomalies`, {
+export async function getOperationalAnomaliesApi(token?: string): Promise<OperationalAnomalyRecord[]> {
+  const res = await fetchAnalyticsApi('/anomalies', {
     method: 'GET',
-    headers: { Authorization: `Bearer ${token}` },
+    headers: getAuthHeaders(token),
   });
-  if (!res.ok) return [];
-  return res.json();
+  return handleResponse<OperationalAnomalyRecord[]>(res, 'Failed to fetch operational anomalies');
 }
 
-export async function getSupervisoryRiskApi(token: string): Promise<SupervisoryRiskRecord | null> {
-  const res = await fetch(`${API_BASE_URL}/analytics/supervisory-risk`, {
+export async function getSupervisoryRiskApi(token?: string): Promise<SupervisoryRiskRecord | null> {
+  const res = await fetchAnalyticsApi('/supervisory-risk', {
     method: 'GET',
-    headers: { Authorization: `Bearer ${token}` },
+    headers: getAuthHeaders(token),
   });
-  if (!res.ok) return null;
-  return res.json();
+  return handleResponse<SupervisoryRiskRecord>(res, 'Failed to fetch supervisory risk indicator');
 }
 
-export async function getReviewPrioritiesApi(token: string): Promise<ReviewPriorityRecord[]> {
-  const res = await fetch(`${API_BASE_URL}/analytics/review-priorities`, {
+export async function getReviewPrioritiesApi(token?: string): Promise<ReviewPriorityRecord[]> {
+  const res = await fetchAnalyticsApi('/review-priorities', {
     method: 'GET',
-    headers: { Authorization: `Bearer ${token}` },
+    headers: getAuthHeaders(token),
   });
-  if (!res.ok) return [];
-  return res.json();
+  return handleResponse<ReviewPriorityRecord[]>(res, 'Failed to fetch review priorities');
 }
 
-export async function getFindingDetailApi(token: string, findingId: string): Promise<FindingDetailRecord | null> {
-  const res = await fetch(`${API_BASE_URL}/analytics/findings/${findingId}`, {
+export async function getFindingDetailApi(token?: string, findingId?: string): Promise<FindingDetailRecord | null> {
+  if (!findingId) return null;
+  const res = await fetchAnalyticsApi(`/findings/${findingId}`, {
     method: 'GET',
-    headers: { Authorization: `Bearer ${token}` },
+    headers: getAuthHeaders(token),
   });
-  if (!res.ok) return null;
-  return res.json();
+  return handleResponse<FindingDetailRecord>(res, 'Failed to fetch finding details');
 }
 
-export async function getFindingTraceabilityApi(token: string, findingId: string): Promise<FindingDetailRecord | null> {
-  const res = await fetch(`${API_BASE_URL}/analytics/findings/${findingId}/traceability`, {
+export async function getFindingTraceabilityApi(token?: string, findingId?: string): Promise<FindingDetailRecord | null> {
+  if (!findingId) return null;
+  const res = await fetchAnalyticsApi(`/findings/${findingId}/traceability`, {
     method: 'GET',
-    headers: { Authorization: `Bearer ${token}` },
+    headers: getAuthHeaders(token),
   });
-  if (!res.ok) return null;
-  return res.json();
+  return handleResponse<FindingDetailRecord>(res, 'Failed to fetch finding traceability');
 }
 
-export async function getEvidenceDetailApi(token: string, evidenceId: string): Promise<EvidenceDetailRecord | null> {
-  const res = await fetch(`${API_BASE_URL}/analytics/evidence/${evidenceId}`, {
+export async function getEvidenceDetailApi(token?: string, evidenceId?: string): Promise<EvidenceDetailRecord | null> {
+  if (!evidenceId) return null;
+  const res = await fetchAnalyticsApi(`/evidence/${evidenceId}`, {
     method: 'GET',
-    headers: { Authorization: `Bearer ${token}` },
+    headers: getAuthHeaders(token),
   });
-  if (!res.ok) return null;
-  return res.json();
+  return handleResponse<EvidenceDetailRecord>(res, 'Failed to fetch evidence details');
 }
+

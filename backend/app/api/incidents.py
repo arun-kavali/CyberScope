@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime, timezone
 from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
@@ -16,6 +17,8 @@ from app.models.intelligence import (
 )
 from app.models.evidence import Alert
 from app.auth.dependencies import require_soc_analyst
+from app.services.audit_service import AuditService
+from app.realtime.publisher import publish_incident_resolved
 
 router = APIRouter(prefix="/incidents", tags=["Incidents"])
 
@@ -302,4 +305,61 @@ async def get_incident_intelligence_endpoint(
         return summary
     except ValueError as ve:
         raise HTTPException(status_code=404, detail=str(ve))
+
+@router.post("/{incident_id}/resolve", status_code=status.HTTP_200_OK)
+async def resolve_incident_endpoint(
+    incident_id: str,
+    db: Session = Depends(get_db),
+    current_user: Profile = Depends(require_soc_analyst)
+):
+    """
+    Resolves an incident, updating status to RESOLVED, appending timeline event, and logging audit entry.
+    Protected by SOC_ANALYST RBAC.
+    """
+    try:
+        inc_uuid = uuid.UUID(incident_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid incident ID UUID format")
+
+    incident = db.scalar(select(Incident).where(Incident.id == inc_uuid))
+    if not incident:
+        raise HTTPException(status_code=404, detail=f"Incident '{incident_id}' not found")
+
+    old_status = incident.status
+    incident.status = "RESOLVED"
+    incident.updated_at = datetime.now(timezone.utc)
+
+    # Append timeline entry
+    timeline_event = IncidentTimeline(
+        incident_id=incident.id,
+        event_type="INCIDENT_RESOLVED",
+        description=f"Incident '{incident.incident_number}' resolved by SOC Analyst ({current_user.username}).",
+        actor_profile_id=current_user.id,
+        timestamp=datetime.now(timezone.utc)
+    )
+    db.add(timeline_event)
+    db.commit()
+
+    # Log audit entry
+    AuditService.log_event(
+        db=db,
+        action="INCIDENT_RESOLVED",
+        actor_user_id=current_user.id,
+        role=current_user.role.name if current_user.role else "SOC_ANALYST",
+        target_type="INCIDENT",
+        target_id=str(incident.id),
+        reason=f"Incident {incident.incident_number} resolved by SOC Analyst",
+        previous_state={"status": old_status},
+        new_state={"status": "RESOLVED"}
+    )
+
+    publish_incident_resolved(incident, current_user)
+
+    return {
+        "status": "success",
+        "message": f"Incident '{incident.incident_number}' resolved successfully.",
+        "incident_id": str(incident.id),
+        "new_status": "RESOLVED"
+    }
+
 

@@ -4,7 +4,7 @@ from datetime import datetime, timezone, timedelta
 from typing import List, Dict, Any, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import select, func, desc, or_, and_, cast, Date
+from sqlalchemy import select, func, desc, or_, and_, cast, Date, case, delete
 
 from app.db.session import get_db
 from app.auth.dependencies import require_soc_analyst
@@ -50,108 +50,134 @@ def sync_execution_gaps(db: Session) -> List[ExecutionGapFinding]:
     1. Unusually fast closure (< 30 seconds threshold)
     2. Missing escalation on CRITICAL severity alerts
     3. Repetitive investigation patterns (>= 3 similar alerts in 24h)
+
+    Caps total Execution Gap Findings stored in the database to max 10.
     """
-    gaps: List[ExecutionGapFinding] = []
+    current_count = db.scalar(select(func.count(ExecutionGapFinding.id))) or 0
 
-    # 1. Unusually Fast Closure
-    closed_invs = db.scalars(
-        select(Investigation).where(Investigation.status.in_(["COMPLETED", "CLOSED", "RESOLVED"]))
-    ).all()
+    if current_count < 10:
+        # 1. Unusually Fast Closure
+        closed_invs = db.scalars(
+            select(Investigation).where(Investigation.status.in_(["COMPLETED", "CLOSED", "RESOLVED"])).limit(10)
+        ).all()
 
-    for inv in closed_invs:
-        if inv.created_at and inv.updated_at and inv.updated_at >= inv.created_at:
-            duration_sec = (inv.updated_at - inv.created_at).total_seconds()
-            if duration_sec < 30.0:
-                reason_str = f"Potential execution gap: Investigation {inv.id} closed in {duration_sec:.1f} seconds, crossing the deterministic 30-second threshold."
+        for inv in closed_invs:
+            if inv.created_at and inv.updated_at and inv.updated_at >= inv.created_at:
+                duration_sec = (inv.updated_at - inv.created_at).total_seconds()
+                if duration_sec < 30.0:
+                    reason_str = f"Potential execution gap: Investigation {inv.id} closed in {duration_sec:.1f} seconds, crossing the deterministic 30-second threshold."
+                    existing = db.scalar(
+                        select(ExecutionGapFinding).where(ExecutionGapFinding.reason == reason_str)
+                    )
+                    if not existing:
+                        gap = ExecutionGapFinding(
+                            finding_type="FAST_CLOSURE",
+                            severity="MEDIUM",
+                            reason=reason_str,
+                            evidence={
+                                "duration_seconds": round(duration_sec, 2),
+                                "created_at": inv.created_at.isoformat(),
+                                "closed_at": inv.updated_at.isoformat()
+                            },
+                            supporting_records={"investigation_id": str(inv.id), "status": inv.status},
+                            threshold=30.0,
+                            peer_context={"peer_median_minutes": 15.0}
+                        )
+                        db.add(gap)
+
+        # 2. Missing Escalation
+        critical_alerts = db.scalars(
+            select(Alert).where(Alert.severity == "CRITICAL").order_by(desc(Alert.created_at)).limit(10)
+        ).all()
+
+        for alert in critical_alerts:
+            esc = db.scalar(select(Escalation).where(Escalation.alert_id == alert.id))
+            if not esc:
+                reason_str = f"Potential execution gap: expected escalation evidence was not observed under configured threshold for CRITICAL alert {alert.alert_code}."
                 existing = db.scalar(
                     select(ExecutionGapFinding).where(ExecutionGapFinding.reason == reason_str)
                 )
                 if not existing:
                     gap = ExecutionGapFinding(
-                        finding_type="FAST_CLOSURE",
-                        severity="MEDIUM",
+                        finding_type="MISSING_ESCALATION",
+                        severity="HIGH",
                         reason=reason_str,
                         evidence={
-                            "duration_seconds": round(duration_sec, 2),
-                            "created_at": inv.created_at.isoformat(),
-                            "closed_at": inv.updated_at.isoformat()
+                            "alert_id": str(alert.id),
+                            "alert_code": alert.alert_code,
+                            "severity": alert.severity
                         },
-                        supporting_records={"investigation_id": str(inv.id), "status": inv.status},
-                        threshold=30.0,
-                        peer_context={"peer_median_minutes": 15.0}
+                        supporting_records={"alert_code": alert.alert_code, "event_type": alert.event_type},
+                        threshold=80.0,
+                        peer_context={"expected_action": "ESCALATE"}
                     )
                     db.add(gap)
-                    db.commit()
-                    db.refresh(gap)
-                    gaps.append(gap)
-                else:
-                    gaps.append(existing)
 
-    # 2. Missing Escalation
-    critical_alerts = db.scalars(
-        select(Alert).where(Alert.severity == "CRITICAL")
-    ).all()
+        # 3. Repetitive Investigations
+        patterns = db.execute(
+            select(Alert.event_type, Alert.user_context, func.count(Alert.id))
+            .where(Alert.user_context.isnot(None))
+            .group_by(Alert.event_type, Alert.user_context)
+            .having(func.count(Alert.id) >= 3)
+            .limit(10)
+        ).all()
 
-    for alert in critical_alerts:
-        esc = db.scalar(select(Escalation).where(Escalation.alert_id == alert.id))
-        if not esc:
-            reason_str = f"Potential execution gap: expected escalation evidence was not observed under configured threshold for CRITICAL alert {alert.alert_code}."
+        for ev_type, usr, cnt in patterns:
+            reason_str = f"Repetitive investigation pattern observed: {cnt} alerts for event type '{ev_type}' and user '{usr}' within active window."
             existing = db.scalar(
                 select(ExecutionGapFinding).where(ExecutionGapFinding.reason == reason_str)
             )
             if not existing:
                 gap = ExecutionGapFinding(
-                    finding_type="MISSING_ESCALATION",
-                    severity="HIGH",
+                    finding_type="REPETITIVE_INVESTIGATION",
+                    severity="MEDIUM",
                     reason=reason_str,
-                    evidence={
-                        "alert_id": str(alert.id),
-                        "alert_code": alert.alert_code,
-                        "severity": alert.severity
-                    },
-                    supporting_records={"alert_code": alert.alert_code, "event_type": alert.event_type},
-                    threshold=80.0,
-                    peer_context={"expected_action": "ESCALATE"}
+                    evidence={"event_type": ev_type, "user_context": usr, "alert_count": cnt},
+                    supporting_records={"user_context": usr, "event_type": ev_type},
+                    threshold=3.0,
+                    peer_context={"normal_daily_average": 1.0}
                 )
                 db.add(gap)
-                db.commit()
-                db.refresh(gap)
-                gaps.append(gap)
-            else:
-                gaps.append(existing)
 
-    # 3. Repetitive Investigations
-    patterns = db.execute(
-        select(Alert.event_type, Alert.user_context, func.count(Alert.id))
-        .where(Alert.user_context.isnot(None))
-        .group_by(Alert.event_type, Alert.user_context)
-        .having(func.count(Alert.id) >= 3)
+        db.commit()
+
+    # Enforce exact 10 records cap: retain top 10 and delete excess
+    top_10_ids = db.scalars(
+        select(ExecutionGapFinding.id)
+        .order_by(
+            case(
+                (ExecutionGapFinding.severity == "CRITICAL", 1),
+                (ExecutionGapFinding.severity == "HIGH", 2),
+                (ExecutionGapFinding.severity == "MEDIUM", 3),
+                (ExecutionGapFinding.severity == "LOW", 4),
+                else_=5
+            ),
+            desc(ExecutionGapFinding.created_at),
+            ExecutionGapFinding.id.asc()
+        )
+        .limit(10)
     ).all()
 
-    for ev_type, usr, cnt in patterns:
-        reason_str = f"Repetitive investigation pattern observed: {cnt} alerts for event type '{ev_type}' and user '{usr}' within active window."
-        existing = db.scalar(
-            select(ExecutionGapFinding).where(ExecutionGapFinding.reason == reason_str)
+    if top_10_ids:
+        db.execute(
+            delete(ExecutionGapFinding).where(ExecutionGapFinding.id.not_in(top_10_ids))
         )
-        if not existing:
-            gap = ExecutionGapFinding(
-                finding_type="REPETITIVE_INVESTIGATION",
-                severity="MEDIUM",
-                reason=reason_str,
-                evidence={"event_type": ev_type, "user_context": usr, "alert_count": cnt},
-                supporting_records={"user_context": usr, "event_type": ev_type},
-                threshold=3.0,
-                peer_context={"normal_daily_average": 1.0}
-            )
-            db.add(gap)
-            db.commit()
-            db.refresh(gap)
-            gaps.append(gap)
-        else:
-            gaps.append(existing)
+        db.commit()
 
-    # Fetch all stored execution gaps if none were generated above
-    all_gaps = db.scalars(select(ExecutionGapFinding).order_by(desc(ExecutionGapFinding.created_at))).all()
+    all_gaps = db.scalars(
+        select(ExecutionGapFinding)
+        .order_by(
+            case(
+                (ExecutionGapFinding.severity == "CRITICAL", 1),
+                (ExecutionGapFinding.severity == "HIGH", 2),
+                (ExecutionGapFinding.severity == "MEDIUM", 3),
+                (ExecutionGapFinding.severity == "LOW", 4),
+                else_=5
+            ),
+            desc(ExecutionGapFinding.created_at),
+            ExecutionGapFinding.id.asc()
+        )
+    ).all()
     return list(all_gaps)
 
 def sync_negative_space(db: Session) -> List[NegativeSpaceFinding]:

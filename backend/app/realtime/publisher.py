@@ -422,6 +422,41 @@ async def publish_ai_intelligence_failed(ai_id: str, target_type: str, target_id
     except Exception as e:
         logger.error(f"Error publishing AI failed event: {e}")
 
+def format_incident_resolved_payload(incident: Any, analyst: Any) -> Dict[str, Any]:
+    analyst_name = getattr(analyst, "full_name", None) or getattr(analyst, "username", None) or getattr(analyst, "email", "SOC Analyst") if hasattr(analyst, "__dict__") else str(analyst)
+    return {
+        "type": "INCIDENT_RESOLVED",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "data": {
+            "incident_id": str(incident.id),
+            "incident_number": incident.incident_number,
+            "status": "RESOLVED",
+            "analyst_name": analyst_name,
+            "resolved_at": incident.updated_at.isoformat() if isinstance(incident.updated_at, datetime) else str(incident.updated_at)
+        }
+    }
+
+async def publish_incident_resolved_async(incident: Any, analyst: Any) -> None:
+    try:
+        payload = format_incident_resolved_payload(incident, analyst)
+        await manager.broadcast_to_role(payload, "SOC_ANALYST")
+    except Exception as e:
+        logger.error(f"Failed to publish INCIDENT_RESOLVED event: {e}")
+
+def publish_incident_resolved(incident: Any, analyst: Any) -> None:
+    try:
+        loop = asyncio.get_running_loop()
+        if loop.is_running():
+            loop.create_task(publish_incident_resolved_async(incident, analyst))
+        else:
+            asyncio.run(publish_incident_resolved_async(incident, analyst))
+    except RuntimeError:
+        try:
+            asyncio.run(publish_incident_resolved_async(incident, analyst))
+        except Exception as e:
+            logger.error(f"Error publishing incident resolved event outside loop: {e}")
+
+
 
 
 

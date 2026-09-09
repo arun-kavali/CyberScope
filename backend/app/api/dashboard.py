@@ -81,6 +81,16 @@ def get_dashboard_summary(db: Session = Depends(get_db)):
     cat_rows = db.query(Alert.event_category, func.count(Alert.id)).group_by(Alert.event_category).all()
     category_distribution = [DistributionItemSchema(name=cat, count=cnt) for cat, cnt in cat_rows if cat]
 
+    # Incident status distribution
+    inc_status_rows = db.query(Incident.status, func.count(Incident.id)).group_by(Incident.status).all()
+    inc_status_dict = {st: cnt for st, cnt in inc_status_rows}
+    incident_status_distribution = [
+        DistributionItemSchema(name="Open", count=inc_status_dict.get("OPEN", 0)),
+        DistributionItemSchema(name="In Progress", count=inc_status_dict.get("IN_PROGRESS", 0)),
+        DistributionItemSchema(name="Resolved", count=inc_status_dict.get("RESOLVED", 0) + inc_status_dict.get("CLOSED", 0)),
+        DistributionItemSchema(name="Closed", count=inc_status_dict.get("CLOSED", 0)),
+    ]
+
     # 3. Critical & High Risk Alerts (Top 10)
     crit_alert_rows = (
         db.query(Alert, RiskScore.score.label("risk_val"), AlertSource.name.label("src_name"))
@@ -193,7 +203,7 @@ def get_dashboard_summary(db: Session = Depends(get_db)):
     # 7. Operational Indicators
     avg_risk = db.query(func.avg(RiskScore.score)).scalar() or 0.0
     avg_conf = db.query(func.avg(Incident.confidence_score)).scalar() or 0.0
-    res_inc = db.query(func.count(Incident.id)).filter(Incident.status == "RESOLVED").scalar() or 0
+    res_inc = db.query(func.count(Incident.id)).filter(Incident.status.in_(["RESOLVED", "CLOSED"])).scalar() or 0
     tot_inc = db.query(func.count(Incident.id)).scalar() or 0
 
     operational_indicators = OperationalIndicatorsSchema(
@@ -209,6 +219,7 @@ def get_dashboard_summary(db: Session = Depends(get_db)):
         risk_distribution=risk_distribution,
         source_distribution=source_distribution,
         category_distribution=category_distribution,
+        incident_status_distribution=incident_status_distribution,
         critical_alerts=critical_alerts,
         active_incidents=active_incidents,
         recent_incidents=recent_incidents,

@@ -1,4 +1,6 @@
-const API_BASE = '/api/v1/response';
+import { API_BASE_URL } from './api';
+
+const API_BASE = `${API_BASE_URL}/api/v1/response`;
 
 export interface ResponsePolicyItem {
   id: string;
@@ -27,8 +29,8 @@ export interface ResponseActionItem {
   created_at: string;
 }
 
-function getHeaders(): HeadersInit {
-  const token = localStorage.getItem('cyberscope_token') || localStorage.getItem('token') || '';
+function getHeaders(authToken?: string): HeadersInit {
+  const token = authToken || localStorage.getItem('cyberscope_token') || '';
   return {
     Authorization: `Bearer ${token}`,
     'Content-Type': 'application/json',
@@ -36,9 +38,12 @@ function getHeaders(): HeadersInit {
 }
 
 export async function getResponsePoliciesApi(): Promise<ResponsePolicyItem[]> {
-  const res = await fetch(`${API_BASE}/policies`, {
+  let res = await fetch(`${API_BASE}/policies`, {
     headers: getHeaders(),
   });
+  if (res.status === 404) {
+    res = await fetch(`${API_BASE_URL}/response/policies`, { headers: getHeaders() });
+  }
   if (!res.ok) {
     throw new Error(`Failed to fetch response policies: ${res.statusText}`);
   }
@@ -46,9 +51,12 @@ export async function getResponsePoliciesApi(): Promise<ResponsePolicyItem[]> {
 }
 
 export async function getResponseActionsApi(): Promise<ResponseActionItem[]> {
-  const res = await fetch(`${API_BASE}/actions`, {
+  let res = await fetch(`${API_BASE}/actions`, {
     headers: getHeaders(),
   });
+  if (res.status === 404) {
+    res = await fetch(`${API_BASE_URL}/response/actions`, { headers: getHeaders() });
+  }
   if (!res.ok) {
     throw new Error(`Failed to fetch response actions: ${res.statusText}`);
   }
@@ -62,11 +70,18 @@ export async function createResponseActionApi(payload: {
   policy_id?: string;
   reason?: string;
 }): Promise<ResponseActionItem> {
-  const res = await fetch(`${API_BASE}/actions`, {
+  let res = await fetch(`${API_BASE}/actions`, {
     method: 'POST',
     headers: getHeaders(),
     body: JSON.stringify(payload),
   });
+  if (res.status === 404) {
+    res = await fetch(`${API_BASE_URL}/response/actions`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify(payload),
+    });
+  }
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
     throw new Error(err.detail || 'Failed to create response action');
@@ -75,11 +90,18 @@ export async function createResponseActionApi(payload: {
 }
 
 export async function approveResponseActionApi(id: string, reason?: string): Promise<ResponseActionItem> {
-  const res = await fetch(`${API_BASE}/actions/${id}/approve`, {
+  let res = await fetch(`${API_BASE}/actions/${id}/approve`, {
     method: 'POST',
     headers: getHeaders(),
     body: JSON.stringify({ reason: reason || 'Approved by analyst' }),
   });
+  if (res.status === 404) {
+    res = await fetch(`${API_BASE_URL}/response/actions/${id}/approve`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({ reason: reason || 'Approved by analyst' }),
+    });
+  }
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
     throw new Error(err.detail || 'Failed to approve response action');
@@ -88,11 +110,18 @@ export async function approveResponseActionApi(id: string, reason?: string): Pro
 }
 
 export async function rejectResponseActionApi(id: string, reason: string): Promise<ResponseActionItem> {
-  const res = await fetch(`${API_BASE}/actions/${id}/reject`, {
+  let res = await fetch(`${API_BASE}/actions/${id}/reject`, {
     method: 'POST',
     headers: getHeaders(),
     body: JSON.stringify({ reason }),
   });
+  if (res.status === 404) {
+    res = await fetch(`${API_BASE_URL}/response/actions/${id}/reject`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({ reason }),
+    });
+  }
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
     throw new Error(err.detail || 'Failed to reject response action');
@@ -101,11 +130,18 @@ export async function rejectResponseActionApi(id: string, reason: string): Promi
 }
 
 export async function rollbackResponseActionApi(id: string, reason?: string): Promise<ResponseActionItem> {
-  const res = await fetch(`${API_BASE}/actions/${id}/rollback`, {
+  let res = await fetch(`${API_BASE}/actions/${id}/rollback`, {
     method: 'POST',
     headers: getHeaders(),
     body: JSON.stringify({ reason: reason || 'Rollback requested by analyst' }),
   });
+  if (res.status === 404) {
+    res = await fetch(`${API_BASE_URL}/response/actions/${id}/rollback`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({ reason: reason || 'Rollback requested by analyst' }),
+    });
+  }
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
     throw new Error(err.detail || 'Failed to rollback response action');

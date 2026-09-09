@@ -82,7 +82,7 @@ def sample_alert(db_session):
 def sample_incident(db_session, sample_alert):
     incident = Incident(
         id=uuid.uuid4(),
-        incident_number=f"INC-2026-{uuid.uuid4().hex[:4].upper()}",
+        incident_number=f"INC-2026-{uuid.uuid4().hex[:8].upper()}",
         title="Suspicious Identity Spike",
         summary="Multiple failed logins from 192.168.1.100",
         severity="HIGH",

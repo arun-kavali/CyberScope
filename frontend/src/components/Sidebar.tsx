@@ -36,32 +36,22 @@ interface NavSection {
 
 const analystNavSections: NavSection[] = [
   {
-    title: 'MAIN',
+    title: 'MAIN MENU',
     items: [
       { name: 'Dashboard', path: '/', icon: LayoutDashboard },
       { name: 'Alerts', path: '/alerts', icon: Bell },
       { name: 'Incidents', path: '/incidents', icon: ShieldAlert },
-      { name: 'Investigations', path: '/investigations', icon: Search },
+      { name: 'Analytics', path: '/analytics', icon: BarChart3 },
     ]
   },
   {
-    title: 'OPERATIONS',
+    title: 'SECURITY OPERATIONS',
     items: [
-      { name: 'Data Sources', path: '/sources', icon: Database },
-      { name: 'Analytics', path: '/analytics', icon: BarChart3 },
+      { name: 'Investigations', path: '/investigations', icon: Search },
       { name: 'Findings', path: '/findings', icon: FileCheck },
       { name: 'Review Priorities', path: '/priorities', icon: Layers },
-    ]
-  },
-  {
-    title: 'RESPONSE',
-    items: [
+      { name: 'Data Sources', path: '/sources', icon: Database },
       { name: 'Response', path: '/response', icon: CheckCircle2 },
-    ]
-  },
-  {
-    title: 'REPORTING',
-    items: [
       { name: 'Reports', path: '/reports', icon: FileText },
       { name: 'Audit Trail', path: '/audit', icon: History },
     ]
@@ -132,21 +122,13 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen = false, onCloseMob
           </div>
         ))}
       </div>
-
-      {/* Footer Branding */}
-      <div className="p-3 border-t border-slate-200 bg-surface-subtle">
-        <div className="text-[10px] text-slate-500 space-y-0.5">
-          <p className="font-bold text-brand-900">CyberScope v1.0 SOC</p>
-          <p className="text-slate-500">Offline-First Platform</p>
-        </div>
-      </div>
     </div>
   );
 
   return (
     <>
       {/* Desktop Persistent Sidebar */}
-      <aside className="hidden md:flex flex-col w-52 bg-white border-r border-slate-200 flex-shrink-0 h-[calc(100vh-45px)]">
+      <aside className="hidden md:flex flex-col w-52 bg-white border-r border-slate-200 flex-shrink-0 h-[calc(100vh-56px)] sticky top-14">
         {sidebarContent}
       </aside>
 

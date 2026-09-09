@@ -64,9 +64,9 @@ export const ReportsPage: React.FC = () => {
   return (
     <div className="space-y-4">
       <PageHeader
-        title="Executive & Operational Reporting Center"
-        subtitle="Automated security posture reports, evidence export packages, and compliance audits"
-        phaseBadge="Reporting Active"
+        title="Reports"
+        subtitle="Automated security posture reports, incident exports, and compliance packages."
+        phaseBadge="SOC Operations"
         breadcrumbs={[{ label: 'CyberScope' }, { label: 'Reports' }]}
       />
 

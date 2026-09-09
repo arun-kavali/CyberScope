@@ -61,7 +61,8 @@ def start_incident_investigation(
         investigation = Investigation(
             summary=f"Active SOC Analyst investigation for Incident {incident.incident_number} — {incident.title}",
             status="IN_PROGRESS",
-            notes=json.dumps([])
+            notes=json.dumps([]),
+            created_by_user_id=analyst_profile.id
         )
         db.add(investigation)
         db.flush()

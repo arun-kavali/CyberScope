@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { UserProfileResponse, LoginRequest } from '../types';
-import { loginApi, logoutApi, getMeApi } from '../services/authApi';
+import { UserProfileResponse, LoginRequest, SignupRequest } from '../types';
+import { loginApi, signupApi, logoutApi, getMeApi } from '../services/authApi';
+import { queryClient } from '../App';
 
 interface AuthContextType {
   user: UserProfileResponse | null;
@@ -8,6 +9,7 @@ interface AuthContextType {
   isLoading: boolean;
   isAuthenticated: boolean;
   login: (credentials: LoginRequest) => Promise<UserProfileResponse>;
+  signup: (payload: SignupRequest) => Promise<UserProfileResponse>;
   logout: () => Promise<void>;
 }
 
@@ -65,7 +67,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const login = useCallback(async (credentials: LoginRequest): Promise<UserProfileResponse> => {
     setIsLoading(true);
     try {
+      queryClient.clear();
       const data = await loginApi(credentials);
+      localStorage.setItem(TOKEN_KEY, data.token);
+      setToken(data.token);
+      setUser(data.user);
+      return data.user;
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  const signup = useCallback(async (payload: SignupRequest): Promise<UserProfileResponse> => {
+    setIsLoading(true);
+    try {
+      queryClient.clear();
+      const data = await signupApi(payload);
       localStorage.setItem(TOKEN_KEY, data.token);
       setToken(data.token);
       setUser(data.user);
@@ -77,14 +94,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const logout = useCallback(async () => {
     setIsLoading(true);
-    const currentToken = localStorage.getItem(TOKEN_KEY) || token;
-    if (currentToken) {
-      await logoutApi(currentToken);
+    try {
+      const currentToken = localStorage.getItem(TOKEN_KEY) || token;
+      if (currentToken) {
+        await logoutApi(currentToken);
+      }
+    } catch (err) {
+      console.warn('Logout API failed, continuing client cleanup:', err);
+    } finally {
+      queryClient.clear();
+      localStorage.removeItem(TOKEN_KEY);
+      setUser(null);
+      setToken(null);
+      setIsLoading(false);
     }
-    localStorage.removeItem(TOKEN_KEY);
-    setUser(null);
-    setToken(null);
-    setIsLoading(false);
   }, [token]);
 
   return (
@@ -95,6 +118,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isLoading,
         isAuthenticated: !!user && !!token,
         login,
+        signup,
         logout,
       }}
     >

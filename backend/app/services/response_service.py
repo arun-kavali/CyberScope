@@ -15,6 +15,7 @@ SUPPORTED_ACTIONS = {
     "DISABLE_USER",
     "TERMINATE_SESSION",
     "ISOLATE_ENDPOINT",
+    "ISOLATE_HOST",
     "QUARANTINE_ARTIFACT",
     "INVESTIGATE_FURTHER"
 }
@@ -277,7 +278,7 @@ class ResponseService:
             prev_state = {"active_sessions": revoked_count, "status": "ACTIVE"}
             new_state = {"active_sessions": 0, "status": "TERMINATED"}
 
-        elif atype == "ISOLATE_ENDPOINT":
+        elif atype in ("ISOLATE_ENDPOINT", "ISOLATE_HOST"):
             ep = db.scalar(select(SandboxEndpoint).where((SandboxEndpoint.endpoint_code == target_id) | (SandboxEndpoint.hostname == target_id)))
             if not ep:
                 ep = SandboxEndpoint(endpoint_code=target_id, hostname=target_id, ip_address="10.0.0.99", status="CONNECTED")
@@ -401,7 +402,7 @@ class ResponseService:
             if user:
                 user.status = prev_state.get("status", "ACTIVE")
 
-        elif atype == "ISOLATE_ENDPOINT":
+        elif atype in ("ISOLATE_ENDPOINT", "ISOLATE_HOST"):
             ep = db.scalar(select(SandboxEndpoint).where((SandboxEndpoint.endpoint_code == target_id) | (SandboxEndpoint.hostname == target_id)))
             if ep:
                 ep.status = prev_state.get("status", "CONNECTED")

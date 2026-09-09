@@ -86,9 +86,9 @@ export const FindingsPage: React.FC = () => {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Evidence-Backed Operational Findings & Gaps"
-        subtitle="Execution gaps, negative-space indicators, and behavioral operational anomaly findings derived from PostgreSQL database evidence"
-        phaseBadge="Phase 18 Operational Intelligence"
+        title="Findings"
+        subtitle="Execution gaps, negative-space indicators, and operational anomaly findings."
+        phaseBadge="SOC Operations"
         breadcrumbs={[{ label: 'CyberScope' }, { label: 'Findings' }]}
       />
 
