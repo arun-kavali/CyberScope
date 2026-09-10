@@ -29,6 +29,7 @@ async def list_incidents(
     limit: int = Query(20, ge=1, le=100, description="Items per page"),
     incident_status: Optional[str] = Query(None, alias="status", description="Filter by status (OPEN, IN_PROGRESS, RESOLVED)"),
     severity: Optional[str] = Query(None, description="Filter by severity (CRITICAL, HIGH, MEDIUM, LOW)"),
+    demo_mode: Optional[bool] = Query(None),
     db: Session = Depends(get_db),
     current_user: Profile = Depends(require_soc_analyst)
 ):
@@ -37,6 +38,12 @@ async def list_incidents(
     Protected by SOC_ANALYST RBAC.
     """
     stmt = select(Incident)
+
+    from app.auth.service import get_workspace_user_ids
+    ws_user_ids = get_workspace_user_ids(db, current_user)
+    user_incidents_subq = select(IncidentAlert.incident_id).join(Alert, Alert.id == IncidentAlert.alert_id).where(Alert.submitted_by_user_id.in_(ws_user_ids))
+    stmt = stmt.where(Incident.id.in_(user_incidents_subq))
+
     if incident_status:
         stmt = stmt.where(Incident.status == incident_status.upper())
     if severity:

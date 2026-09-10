@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Database,
   FileText,
@@ -29,6 +30,11 @@ import {
   connectDatabaseSourceApi,
   validateSourceDataApi,
   importSourceDataApi,
+  testSourceConnectionApi,
+  refreshSourceSchemaApi,
+  previewSourceDataApi,
+  syncSourceDataApi,
+  disconnectSourceApi,
   DataSourceItem,
   SchemaDiscoveryResponse,
   ValidationResponse,
@@ -60,8 +66,25 @@ const CANONICAL_TARGET_FIELDS = [
   { key: 'timestamp', label: 'Timestamp' }
 ];
 
+const LIVE_CONNECTORS = ['POSTGRESQL', 'CSV', 'JSON', 'XLS', 'XLSX'];
+
 export const DataSourcesPage: React.FC = () => {
-  const [activeSources, setActiveSources] = useState<DataSourceItem[]>([]);
+  const queryClient = useQueryClient();
+
+  // Fetch sources via TanStack Query
+  const {
+    data: sourcesData = [],
+    isLoading: isSourcesLoading,
+    isError: isSourcesError,
+    error: sourcesError,
+    refetch: refetchSources
+  } = useQuery<DataSourceItem[]>({
+    queryKey: ['sources'],
+    queryFn: getSourcesApi,
+  });
+
+  const activeSources = sourcesData.filter((s) => s.status !== 'DISCONNECTED');
+
   const [selectedConnector, setSelectedConnector] = useState<string | null>('POSTGRESQL');
   const [drawerOpen, setDrawerOpen] = useState<boolean>(true);
 
@@ -77,7 +100,7 @@ export const DataSourcesPage: React.FC = () => {
   const [sourceName, setSourceName] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
-  // Connection testing state
+  // Connection testing state in wizard
   const [isTesting, setIsTesting] = useState(false);
   const [testSuccess, setTestSuccess] = useState<boolean | null>(null);
   const [testMessage, setTestMessage] = useState<string | null>(null);
@@ -91,18 +114,120 @@ export const DataSourcesPage: React.FC = () => {
   const [wizardError, setWizardError] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
 
-  const fetchSources = async () => {
+  // Action Menu & Modal States
+  const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
+  const [actionRunningId, setActionRunningId] = useState<string | null>(null);
+  const [detailsDrawerSource, setDetailsDrawerSource] = useState<DataSourceItem | null>(null);
+  const [previewModal, setPreviewModal] = useState<{
+    isOpen: boolean;
+    source: DataSourceItem | null;
+    loading: boolean;
+    columns: string[];
+    records: any[];
+    message?: string;
+  }>({ isOpen: false, source: null, loading: false, columns: [], records: [] });
+  const [disconnectModal, setDisconnectModal] = useState<{
+    isOpen: boolean;
+    source: DataSourceItem | null;
+    loading: boolean;
+  }>({ isOpen: false, source: null, loading: false });
+  const [actionFeedback, setActionFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  const handleTestConnectionClick = async (s: DataSourceItem) => {
+    setActiveMenuId(null);
+    setActionFeedback(null);
+    setActionRunningId(s.id);
     try {
-      const data = await getSourcesApi();
-      setActiveSources(data);
-    } catch (err) {
-      console.error('Failed to load data sources', err);
+      const res = await testSourceConnectionApi(s.id);
+      setActionFeedback({
+        type: res.success ? 'success' : 'error',
+        message: res.message || (res.success ? 'Connection verified successfully.' : 'Connection test failed.')
+      });
+      queryClient.invalidateQueries({ queryKey: ['sources'] });
+    } catch (err: any) {
+      setActionFeedback({ type: 'error', message: err.message || 'Connection test failed.' });
+    } finally {
+      setActionRunningId(null);
     }
   };
 
-  useEffect(() => {
-    fetchSources();
-  }, []);
+  const handleRefreshSchemaClick = async (s: DataSourceItem) => {
+    setActiveMenuId(null);
+    setActionFeedback(null);
+    setActionRunningId(s.id);
+    try {
+      const res = await refreshSourceSchemaApi(s.id);
+      setActionFeedback({
+        type: 'success',
+        message: `Schema refreshed successfully (${res.total_fields} fields discovered).`
+      });
+      queryClient.invalidateQueries({ queryKey: ['sources'] });
+    } catch (err: any) {
+      setActionFeedback({ type: 'error', message: err.message || 'Schema refresh failed.' });
+    } finally {
+      setActionRunningId(null);
+    }
+  };
+
+  const handlePreviewDataClick = async (s: DataSourceItem) => {
+    setActiveMenuId(null);
+    setPreviewModal({ isOpen: true, source: s, loading: true, columns: [], records: [] });
+    try {
+      const res = await previewSourceDataApi(s.id, 20);
+      setPreviewModal({
+        isOpen: true,
+        source: s,
+        loading: false,
+        columns: res.columns || [],
+        records: res.records || [],
+        message: res.message
+      });
+    } catch (err: any) {
+      setPreviewModal({
+        isOpen: true,
+        source: s,
+        loading: false,
+        columns: [],
+        records: [],
+        message: err.message || 'Failed to preview source data'
+      });
+    }
+  };
+
+  const handleSyncNowClick = async (s: DataSourceItem) => {
+    setActiveMenuId(null);
+    setActionFeedback(null);
+    setActionRunningId(s.id);
+    try {
+      const res = await syncSourceDataApi(s.id);
+      setActionFeedback({
+        type: 'success',
+        message: `Sync completed: Ingested ${res.imported_records} records into SOC workspace.`
+      });
+      queryClient.invalidateQueries({ queryKey: ['sources'] });
+    } catch (err: any) {
+      setActionFeedback({ type: 'error', message: err.message || 'Data source sync failed.' });
+    } finally {
+      setActionRunningId(null);
+    }
+  };
+
+  const handleConfirmDisconnectAction = async () => {
+    if (!disconnectModal.source) return;
+    setDisconnectModal((prev) => ({ ...prev, loading: true }));
+    try {
+      await disconnectSourceApi(disconnectModal.source.id);
+      setActionFeedback({
+        type: 'success',
+        message: `Data source '${disconnectModal.source.name}' disconnected. Historical security records preserved.`
+      });
+      setDisconnectModal({ isOpen: false, source: null, loading: false });
+      queryClient.invalidateQueries({ queryKey: ['sources'] });
+    } catch (err: any) {
+      setActionFeedback({ type: 'error', message: err.message || 'Failed to disconnect data source.' });
+      setDisconnectModal({ isOpen: false, source: null, loading: false });
+    }
+  };
 
   const handleSelectConnector = (type: string) => {
     setSelectedConnector(type);
@@ -126,9 +251,14 @@ export const DataSourcesPage: React.FC = () => {
     setTestSuccess(null);
     setTestMessage(null);
     try {
-      await new Promise((resolve) => setTimeout(resolve, 600));
-      setTestSuccess(true);
-      setTestMessage('Connection verified');
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      if (!LIVE_CONNECTORS.includes(selectedConnector || '')) {
+        setTestSuccess(false);
+        setTestMessage(`Connector '${selectedConnector}' is architecture-ready but sandbox only.`);
+      } else {
+        setTestSuccess(true);
+        setTestMessage('Connection parameters verified.');
+      }
     } catch (err: any) {
       setTestSuccess(false);
       setTestMessage(err.message || 'Connection test failed');
@@ -153,7 +283,7 @@ export const DataSourcesPage: React.FC = () => {
         const nameToUse = sourceName || `${selectedConnector} Source`;
         let config: Record<string, any> = {};
         if (['POSTGRESQL', 'MYSQL'].includes(selectedConnector)) {
-          config = { host, port: parseInt(port), database, table_name: tableName, user: dbUser, password: dbPass, ssl_mode: sslMode };
+          config = { host, port: parseInt(port) || 5432, database, table_name: tableName, user: dbUser, password: dbPass, ssl_mode: sslMode };
         } else if (selectedConnector === 'MONGODB') {
           config = { connection_string: `mongodb://${host}:${port}`, database, collection: tableName };
         } else if (selectedConnector === 'SUPABASE') {
@@ -215,7 +345,7 @@ export const DataSourcesPage: React.FC = () => {
       });
       setImportRes(res);
       setStep(4);
-      fetchSources();
+      queryClient.invalidateQueries({ queryKey: ['sources'] });
     } catch (err: any) {
       setWizardError(err.message || 'Import failed');
     } finally {
@@ -223,53 +353,37 @@ export const DataSourcesPage: React.FC = () => {
     }
   };
 
-  // Connected Sources standard fallback items
-  const defaultConnectedSources = [
-    { name: 'PostgreSQL Production', type: 'PostgreSQL', status: 'Connected', records: '128,492', lastSync: '2 minutes ago' },
-    { name: 'Security Events JSON', type: 'JSON', status: 'Connected', records: '48,921', lastSync: '5 minutes ago' },
-    { name: 'Endpoint CSV Dataset', type: 'CSV', status: 'Validation Required', records: '12,450', lastSync: 'Never' },
-  ];
-
   return (
-    <div className="space-y-5">
+    <div className="space-y-5 max-w-full overflow-x-hidden">
       {/* Top Header */}
-      <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-2xs flex items-center justify-between">
+      <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-bold text-slate-900 tracking-tight">Data Source Center</h1>
-          <p className="text-xs text-slate-500 font-medium">Connect and manage security data sources</p>
+          <p className="text-xs text-slate-500 font-medium">Connect, validate, and manage security telemetry sources</p>
         </div>
         <div className="flex items-center space-x-2">
           <button
-            onClick={fetchSources}
-            className="flex items-center space-x-1.5 px-3 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-semibold rounded-lg border border-slate-200 transition-colors shadow-2xs"
+            onClick={() => refetchSources()}
+            className="flex items-center space-x-1.5 px-3 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-semibold rounded-lg border border-slate-200 transition-colors shadow-2xs cursor-pointer"
           >
-            {renderIcon(RefreshCw, 'h-3.5 w-3.5 text-slate-500')}
+            {renderIcon(RefreshCw, `h-3.5 w-3.5 text-slate-500 ${isSourcesLoading ? 'animate-spin' : ''}`)}
             <span>Refresh Health</span>
           </button>
         </div>
       </div>
 
-      {/* Connection Workflow Card */}
+      {/* Connection Workflow Diagram Card */}
       <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-2xs space-y-4">
         <h2 className="text-xs font-bold text-slate-900 tracking-wide uppercase">Connect a Data Source</h2>
         
-        <div className="grid grid-cols-2 md:grid-cols-6 gap-2 items-center text-center">
-          {/* Step 1 */}
-          <div className="flex flex-col items-center space-y-2 relative">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3 items-center text-center">
+          <div className="flex flex-col items-center space-y-2">
             <div className="w-10 h-10 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-center text-slate-700 shadow-2xs">
               {renderIcon(Database, 'h-5 w-5 text-emerald-700')}
             </div>
             <span className="text-[10px] font-bold text-slate-800 uppercase tracking-wider">DATA SOURCE</span>
           </div>
 
-          {/* Connector Line 1 */}
-          <div className="hidden md:flex items-center justify-center">
-            <div className="h-0.5 w-full bg-emerald-500/40 relative flex items-center justify-end">
-              <div className="w-1.5 h-1.5 rounded-full bg-emerald-600"></div>
-            </div>
-          </div>
-
-          {/* Step 2 */}
           <div className="flex flex-col items-center space-y-2">
             <div className="w-10 h-10 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-center text-slate-700 shadow-2xs">
               {renderIcon(Search, 'h-5 w-5 text-slate-600')}
@@ -277,14 +391,6 @@ export const DataSourcesPage: React.FC = () => {
             <span className="text-[10px] font-bold text-slate-800 uppercase tracking-wider">SCHEMA DISCOVERY</span>
           </div>
 
-          {/* Connector Line 2 */}
-          <div className="hidden md:flex items-center justify-center">
-            <div className="h-0.5 w-full bg-emerald-500/40 relative flex items-center justify-end">
-              <div className="w-1.5 h-1.5 rounded-full bg-emerald-600"></div>
-            </div>
-          </div>
-
-          {/* Step 3 */}
           <div className="flex flex-col items-center space-y-2">
             <div className="w-10 h-10 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-center text-slate-700 shadow-2xs">
               {renderIcon(SlidersHorizontal, 'h-5 w-5 text-slate-600')}
@@ -292,14 +398,6 @@ export const DataSourcesPage: React.FC = () => {
             <span className="text-[10px] font-bold text-slate-800 uppercase tracking-wider">FIELD MAPPING</span>
           </div>
 
-          {/* Connector Line 3 */}
-          <div className="hidden md:flex items-center justify-center">
-            <div className="h-0.5 w-full bg-emerald-500/40 relative flex items-center justify-end">
-              <div className="w-1.5 h-1.5 rounded-full bg-emerald-600"></div>
-            </div>
-          </div>
-
-          {/* Step 4 */}
           <div className="flex flex-col items-center space-y-2">
             <div className="w-10 h-10 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-center text-slate-700 shadow-2xs">
               {renderIcon(ShieldCheck, 'h-5 w-5 text-slate-600')}
@@ -307,14 +405,6 @@ export const DataSourcesPage: React.FC = () => {
             <span className="text-[10px] font-bold text-slate-800 uppercase tracking-wider">VALIDATION</span>
           </div>
 
-          {/* Connector Line 4 */}
-          <div className="hidden md:flex items-center justify-center">
-            <div className="h-0.5 w-full bg-emerald-500/40 relative flex items-center justify-end">
-              <div className="w-1.5 h-1.5 rounded-full bg-emerald-600"></div>
-            </div>
-          </div>
-
-          {/* Step 5 */}
           <div className="flex flex-col items-center space-y-2">
             <div className="w-10 h-10 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-center text-slate-700 shadow-2xs">
               {renderIcon(GitMerge, 'h-5 w-5 text-slate-600')}
@@ -322,14 +412,6 @@ export const DataSourcesPage: React.FC = () => {
             <span className="text-[10px] font-bold text-slate-800 uppercase tracking-wider">NORMALIZATION</span>
           </div>
 
-          {/* Connector Line 5 */}
-          <div className="hidden md:flex items-center justify-center">
-            <div className="h-0.5 w-full bg-emerald-500/40 relative flex items-center justify-end">
-              <div className="w-1.5 h-1.5 rounded-full bg-emerald-600"></div>
-            </div>
-          </div>
-
-          {/* Step 6 */}
           <div className="flex flex-col items-center space-y-2">
             <div className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-700 shadow-2xs">
               {renderIcon(Shield, 'h-5 w-5 text-emerald-700')}
@@ -351,11 +433,14 @@ export const DataSourcesPage: React.FC = () => {
           >
             <div className="flex items-start justify-between">
               <div>
-                <h3 className="text-sm font-bold text-slate-900">PostgreSQL</h3>
-                <p className="text-[11px] text-slate-500">Connect PostgreSQL database</p>
+                <div className="flex items-center space-x-1.5">
+                  <h3 className="text-sm font-bold text-slate-900">PostgreSQL</h3>
+                  <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">LIVE</span>
+                </div>
+                <p className="text-[11px] text-slate-500 mt-0.5">Connect PostgreSQL database</p>
               </div>
-              <div className="w-12 h-12 bg-sky-100/70 border border-sky-200 rounded-lg flex items-center justify-center shrink-0">
-                <Database className="h-6 w-6 text-sky-800" />
+              <div className="w-10 h-10 bg-sky-100/70 border border-sky-200 rounded-lg flex items-center justify-center shrink-0">
+                <Database className="h-5 w-5 text-sky-800" />
               </div>
             </div>
             <button className="w-full py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold rounded-lg transition-colors shadow-2xs">
@@ -372,11 +457,14 @@ export const DataSourcesPage: React.FC = () => {
           >
             <div className="flex items-start justify-between">
               <div>
-                <h3 className="text-sm font-bold text-slate-900">MySQL</h3>
-                <p className="text-[11px] text-slate-500">Connect MySQL database</p>
+                <div className="flex items-center space-x-1.5">
+                  <h3 className="text-sm font-bold text-slate-900">MySQL</h3>
+                  <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-100 text-amber-800 border border-amber-300">Sandbox</span>
+                </div>
+                <p className="text-[11px] text-slate-500 mt-0.5">Architecture-ready connector</p>
               </div>
-              <div className="w-12 h-12 bg-amber-100/70 border border-amber-200 rounded-lg flex items-center justify-center shrink-0">
-                <Server className="h-6 w-6 text-amber-800" />
+              <div className="w-10 h-10 bg-amber-100/70 border border-amber-200 rounded-lg flex items-center justify-center shrink-0">
+                <Server className="h-5 w-5 text-amber-800" />
               </div>
             </div>
             <button className="w-full py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold rounded-lg transition-colors shadow-2xs">
@@ -393,11 +481,14 @@ export const DataSourcesPage: React.FC = () => {
           >
             <div className="flex items-start justify-between">
               <div>
-                <h3 className="text-sm font-bold text-slate-900">MongoDB</h3>
-                <p className="text-[11px] text-slate-500">Connect MongoDB database</p>
+                <div className="flex items-center space-x-1.5">
+                  <h3 className="text-sm font-bold text-slate-900">MongoDB</h3>
+                  <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-100 text-amber-800 border border-amber-300">Sandbox</span>
+                </div>
+                <p className="text-[11px] text-slate-500 mt-0.5">Architecture-ready connector</p>
               </div>
-              <div className="w-12 h-12 bg-emerald-100/70 border border-emerald-200 rounded-lg flex items-center justify-center shrink-0">
-                <Layers className="h-6 w-6 text-emerald-800" />
+              <div className="w-10 h-10 bg-emerald-100/70 border border-emerald-200 rounded-lg flex items-center justify-center shrink-0">
+                <Layers className="h-5 w-5 text-emerald-800" />
               </div>
             </div>
             <button className="w-full py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold rounded-lg transition-colors shadow-2xs">
@@ -414,11 +505,14 @@ export const DataSourcesPage: React.FC = () => {
           >
             <div className="flex items-start justify-between">
               <div>
-                <h3 className="text-sm font-bold text-slate-900">Supabase</h3>
-                <p className="text-[11px] text-slate-500">Connect Supabase project</p>
+                <div className="flex items-center space-x-1.5">
+                  <h3 className="text-sm font-bold text-slate-900">Supabase</h3>
+                  <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-100 text-amber-800 border border-amber-300">Sandbox</span>
+                </div>
+                <p className="text-[11px] text-slate-500 mt-0.5">Architecture-ready connector</p>
               </div>
-              <div className="w-12 h-12 bg-emerald-100/70 border border-emerald-200 rounded-lg flex items-center justify-center shrink-0">
-                <Zap className="h-6 w-6 text-emerald-700" />
+              <div className="w-10 h-10 bg-emerald-100/70 border border-emerald-200 rounded-lg flex items-center justify-center shrink-0">
+                <Zap className="h-5 w-5 text-emerald-700" />
               </div>
             </div>
             <button className="w-full py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold rounded-lg transition-colors shadow-2xs">
@@ -435,11 +529,14 @@ export const DataSourcesPage: React.FC = () => {
           >
             <div className="flex items-start justify-between">
               <div>
-                <h3 className="text-sm font-bold text-slate-900">REST API</h3>
-                <p className="text-[11px] text-slate-500">Connect external API</p>
+                <div className="flex items-center space-x-1.5">
+                  <h3 className="text-sm font-bold text-slate-900">REST API</h3>
+                  <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-100 text-amber-800 border border-amber-300">Sandbox</span>
+                </div>
+                <p className="text-[11px] text-slate-500 mt-0.5">Architecture-ready connector</p>
               </div>
-              <div className="w-12 h-12 bg-blue-100/70 border border-blue-200 rounded-lg flex items-center justify-center shrink-0">
-                <Globe className="h-6 w-6 text-blue-700" />
+              <div className="w-10 h-10 bg-blue-100/70 border border-blue-200 rounded-lg flex items-center justify-center shrink-0">
+                <Globe className="h-5 w-5 text-blue-700" />
               </div>
             </div>
             <button className="w-full py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold rounded-lg transition-colors shadow-2xs">
@@ -456,11 +553,14 @@ export const DataSourcesPage: React.FC = () => {
           >
             <div className="flex items-start justify-between">
               <div>
-                <h3 className="text-sm font-bold text-slate-900">CSV</h3>
-                <p className="text-[11px] text-slate-500">Upload CSV file</p>
+                <div className="flex items-center space-x-1.5">
+                  <h3 className="text-sm font-bold text-slate-900">CSV</h3>
+                  <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">LIVE</span>
+                </div>
+                <p className="text-[11px] text-slate-500 mt-0.5">Upload CSV file</p>
               </div>
-              <div className="w-12 h-12 bg-teal-100/70 border border-teal-200 rounded-lg flex items-center justify-center shrink-0">
-                <FileText className="h-6 w-6 text-teal-800" />
+              <div className="w-10 h-10 bg-teal-100/70 border border-teal-200 rounded-lg flex items-center justify-center shrink-0">
+                <FileText className="h-5 w-5 text-teal-800" />
               </div>
             </div>
             <button className="w-full py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold rounded-lg transition-colors shadow-2xs">
@@ -477,11 +577,14 @@ export const DataSourcesPage: React.FC = () => {
           >
             <div className="flex items-start justify-between">
               <div>
-                <h3 className="text-sm font-bold text-slate-900">JSON</h3>
-                <p className="text-[11px] text-slate-500">Upload JSON file</p>
+                <div className="flex items-center space-x-1.5">
+                  <h3 className="text-sm font-bold text-slate-900">JSON</h3>
+                  <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">LIVE</span>
+                </div>
+                <p className="text-[11px] text-slate-500 mt-0.5">Upload JSON file</p>
               </div>
-              <div className="w-12 h-12 bg-rose-100/70 border border-rose-200 rounded-lg flex items-center justify-center shrink-0">
-                <Code className="h-6 w-6 text-rose-800" />
+              <div className="w-10 h-10 bg-rose-100/70 border border-rose-200 rounded-lg flex items-center justify-center shrink-0">
+                <Code className="h-5 w-5 text-rose-800" />
               </div>
             </div>
             <button className="w-full py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold rounded-lg transition-colors shadow-2xs">
@@ -498,11 +601,14 @@ export const DataSourcesPage: React.FC = () => {
           >
             <div className="flex items-start justify-between">
               <div>
-                <h3 className="text-sm font-bold text-slate-900">Excel</h3>
-                <p className="text-[11px] text-slate-500">Upload spreadsheet</p>
+                <div className="flex items-center space-x-1.5">
+                  <h3 className="text-sm font-bold text-slate-900">Excel</h3>
+                  <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">LIVE</span>
+                </div>
+                <p className="text-[11px] text-slate-500 mt-0.5">Upload spreadsheet</p>
               </div>
-              <div className="w-12 h-12 bg-emerald-100/70 border border-emerald-200 rounded-lg flex items-center justify-center shrink-0">
-                <FileSpreadsheet className="h-6 w-6 text-emerald-800" />
+              <div className="w-10 h-10 bg-emerald-100/70 border border-emerald-200 rounded-lg flex items-center justify-center shrink-0">
+                <FileSpreadsheet className="h-5 w-5 text-emerald-800" />
               </div>
             </div>
             <button className="w-full py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold rounded-lg transition-colors shadow-2xs">
@@ -515,7 +621,12 @@ export const DataSourcesPage: React.FC = () => {
         {drawerOpen && selectedConnector && (
           <div className="lg:absolute right-0 top-0 lg:w-[340px] w-full bg-white border border-slate-200 rounded-xl shadow-lg p-4 space-y-4 z-20 transition-all mt-4 lg:mt-0">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <h3 className="text-sm font-bold text-slate-900">Connect {selectedConnector}</h3>
+              <div className="flex items-center space-x-2">
+                <h3 className="text-sm font-bold text-slate-900">Connect {selectedConnector}</h3>
+                <span className={`px-1.5 py-0.2 rounded text-[9px] font-bold ${LIVE_CONNECTORS.includes(selectedConnector) ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-amber-100 text-amber-800 border border-amber-300'}`}>
+                  {LIVE_CONNECTORS.includes(selectedConnector) ? 'Live' : 'Sandbox'}
+                </span>
+              </div>
               <button
                 onClick={() => setDrawerOpen(false)}
                 className="text-slate-400 hover:text-slate-600 transition-colors p-1"
@@ -538,9 +649,10 @@ export const DataSourcesPage: React.FC = () => {
                 {['POSTGRESQL', 'MYSQL', 'MONGODB'].includes(selectedConnector) ? (
                   <>
                     <div>
-                      <label className="block text-[11px] font-semibold text-slate-700 mb-1">Host</label>
+                      <label className="block text-[11px] font-semibold text-slate-700 mb-1">Host <span className="text-rose-500">*</span></label>
                       <input
                         type="text"
+                        required
                         value={host}
                         onChange={(e) => setHost(e.target.value)}
                         className="w-full p-2 border border-slate-300 rounded-lg text-xs focus:ring-1 focus:ring-emerald-600 outline-none"
@@ -548,9 +660,10 @@ export const DataSourcesPage: React.FC = () => {
                     </div>
 
                     <div>
-                      <label className="block text-[11px] font-semibold text-slate-700 mb-1">Port</label>
+                      <label className="block text-[11px] font-semibold text-slate-700 mb-1">Port <span className="text-rose-500">*</span></label>
                       <input
                         type="text"
+                        required
                         value={port}
                         onChange={(e) => setPort(e.target.value)}
                         className="w-full p-2 border border-slate-300 rounded-lg text-xs focus:ring-1 focus:ring-emerald-600 outline-none"
@@ -558,9 +671,10 @@ export const DataSourcesPage: React.FC = () => {
                     </div>
 
                     <div>
-                      <label className="block text-[11px] font-semibold text-slate-700 mb-1">Database</label>
+                      <label className="block text-[11px] font-semibold text-slate-700 mb-1">Database Name <span className="text-rose-500">*</span></label>
                       <input
                         type="text"
+                        required
                         value={database}
                         onChange={(e) => setDatabase(e.target.value)}
                         className="w-full p-2 border border-slate-300 rounded-lg text-xs focus:ring-1 focus:ring-emerald-600 outline-none"
@@ -568,7 +682,7 @@ export const DataSourcesPage: React.FC = () => {
                     </div>
 
                     <div>
-                      <label className="block text-[11px] font-semibold text-slate-700 mb-1">Table / Collection</label>
+                      <label className="block text-[11px] font-semibold text-slate-700 mb-1">Table / Collection Name</label>
                       <input
                         type="text"
                         value={tableName}
@@ -624,7 +738,7 @@ export const DataSourcesPage: React.FC = () => {
 
                     <div className="border-2 border-dashed border-slate-300 rounded-xl p-4 text-center hover:border-emerald-600 transition-colors bg-slate-50">
                       {renderIcon(Upload, 'h-6 w-6 text-slate-400 mx-auto mb-1')}
-                      <p className="font-semibold text-slate-700 text-xs">Select {selectedConnector} File</p>
+                      <p className="font-semibold text-slate-700 text-xs">Select {selectedConnector} File <span className="text-rose-500">*</span></p>
                       <input
                         type="file"
                         onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
@@ -665,14 +779,21 @@ export const DataSourcesPage: React.FC = () => {
                     type="button"
                     onClick={handleRunDiscovery}
                     disabled={isProcessing}
-                    className="w-full py-2 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-lg transition-colors text-xs shadow-2xs"
+                    className="w-full py-2 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-lg transition-colors text-xs shadow-2xs flex items-center justify-center space-x-1.5 cursor-pointer"
                   >
-                    {isProcessing ? 'Connecting & Discovering...' : 'Connect Data Source'}
+                    {isProcessing ? (
+                      <>
+                        <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                        <span>Connecting & Discovering...</span>
+                      </>
+                    ) : (
+                      <span>Connect Data Source</span>
+                    )}
                   </button>
 
-                  {testSuccess && (
-                    <div className="flex items-center justify-center space-x-1 text-emerald-700 text-xs font-bold py-1">
-                      {renderIcon(CheckCircle2, 'h-4 w-4 text-emerald-600')}
+                  {testSuccess !== null && (
+                    <div className={`flex items-center justify-center space-x-1 text-xs font-bold py-1 ${testSuccess ? 'text-emerald-700' : 'text-amber-800'}`}>
+                      {renderIcon(testSuccess ? CheckCircle2 : AlertTriangle, 'h-4 w-4')}
                       <span>{testMessage || 'Connection verified'}</span>
                     </div>
                   )}
@@ -715,9 +836,16 @@ export const DataSourcesPage: React.FC = () => {
                   type="button"
                   onClick={handleRunValidation}
                   disabled={isProcessing}
-                  className="w-full py-2 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-lg text-xs"
+                  className="w-full py-2 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-lg text-xs flex items-center justify-center space-x-1.5 cursor-pointer"
                 >
-                  {isProcessing ? 'Validating...' : 'Validate Mapped Data'}
+                  {isProcessing ? (
+                    <>
+                      <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                      <span>Validating...</span>
+                    </>
+                  ) : (
+                    <span>Validate Mapped Data</span>
+                  )}
                 </button>
               </div>
             )}
@@ -734,9 +862,16 @@ export const DataSourcesPage: React.FC = () => {
                   type="button"
                   onClick={handleExecuteImport}
                   disabled={isProcessing}
-                  className="w-full py-2 bg-emerald-800 hover:bg-emerald-900 text-white font-bold rounded-lg text-xs"
+                  className="w-full py-2 bg-emerald-800 hover:bg-emerald-900 text-white font-bold rounded-lg text-xs flex items-center justify-center space-x-1.5 cursor-pointer"
                 >
-                  {isProcessing ? 'Importing Pipeline...' : 'Execute Ingestion Pipeline'}
+                  {isProcessing ? (
+                    <>
+                      <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                      <span>Importing Pipeline...</span>
+                    </>
+                  ) : (
+                    <span>Execute Ingestion Pipeline</span>
+                  )}
                 </button>
               </div>
             )}
@@ -752,7 +887,7 @@ export const DataSourcesPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setDrawerOpen(false)}
-                  className="w-full py-2 bg-slate-900 hover:bg-slate-950 text-white font-bold rounded-lg text-xs"
+                  className="w-full py-2 bg-slate-900 hover:bg-slate-950 text-white font-bold rounded-lg text-xs cursor-pointer"
                 >
                   Done
                 </button>
@@ -768,11 +903,11 @@ export const DataSourcesPage: React.FC = () => {
         <div className="lg:col-span-2 bg-white border border-slate-200 rounded-xl p-5 shadow-2xs space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-bold text-slate-900">Connected Data Sources</h2>
-            <span className="text-xs text-slate-500 font-medium">{activeSources.length + defaultConnectedSources.length} Connected</span>
+            <span className="text-xs text-slate-500 font-medium">{activeSources.length} Connected</span>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs border-collapse">
+          <div className="overflow-x-auto w-full border border-slate-200 rounded-lg">
+            <table className="w-full text-left text-xs border-collapse min-w-[550px]">
               <thead>
                 <tr className="border-b border-slate-200 bg-slate-50/70 text-slate-700 font-bold uppercase tracking-wider text-[10px]">
                   <th className="py-2.5 px-3">Name</th>
@@ -783,68 +918,118 @@ export const DataSourcesPage: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-slate-800 font-sans">
-                {/* Active Dynamic Backend Sources */}
-                {activeSources.map((s) => (
-                  <tr key={s.id} className="hover:bg-slate-50/80 transition-colors">
-                    <td className="py-3 px-3 font-bold text-slate-900 flex items-center space-x-2">
-                      <div className="p-1.5 bg-emerald-50 border border-emerald-200 rounded-md text-emerald-800">
-                        {renderIcon(Database, 'h-3.5 w-3.5')}
+                {isSourcesLoading ? (
+                  <tr>
+                    <td colSpan={5} className="py-8 text-center text-slate-500">
+                      <div className="flex items-center justify-center space-x-2">
+                        <RefreshCw className="h-4 w-4 animate-spin text-emerald-600" />
+                        <span className="font-medium">Loading connected data sources...</span>
                       </div>
-                      <span>{s.name}</span>
-                    </td>
-                    <td className="py-3 px-3">
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 mr-1"></span>
-                        Connected
-                      </span>
-                    </td>
-                    <td className="py-3 px-3 font-mono font-semibold text-slate-700">Imported</td>
-                    <td className="py-3 px-3 text-slate-500 font-medium">Just now</td>
-                    <td className="py-3 px-3 text-right">
-                      <button className="p-1 hover:bg-slate-100 rounded text-slate-400 hover:text-slate-600">
-                        {renderIcon(MoreHorizontal, 'h-4 w-4')}
-                      </button>
                     </td>
                   </tr>
-                ))}
+                ) : isSourcesError ? (
+                  <tr>
+                    <td colSpan={5} className="py-6 text-center text-rose-700 bg-rose-50/50">
+                      <span>Failed to load data sources. {(sourcesError as any)?.message}</span>
+                    </td>
+                  </tr>
+                ) : activeSources.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="py-8 text-center text-slate-500 font-medium">
+                      No connected data sources found. Connect a data source using the connector cards above.
+                    </td>
+                  </tr>
+                ) : (
+                  activeSources.map((s) => (
+                    <tr key={s.id} className="hover:bg-slate-50/80 transition-colors">
+                      <td className="py-3 px-3 font-bold text-slate-900 flex items-center space-x-2">
+                        <div className={`p-1.5 rounded-md border shrink-0 ${
+                          s.type === 'POSTGRESQL' || s.type === 'MYSQL' ? 'bg-sky-50 border-sky-200 text-sky-800' :
+                          s.type === 'JSON' ? 'bg-rose-50 border-rose-200 text-rose-800' :
+                          'bg-teal-50 border-teal-200 text-teal-800'
+                        }`}>
+                          {renderIcon(Database, 'h-3.5 w-3.5')}
+                        </div>
+                        <span className="truncate max-w-[180px] sm:max-w-[240px]" title={s.name}>{s.name}</span>
+                      </td>
+                      <td className="py-3 px-3">
+                        {s.status === 'DISCONNECTED' ? (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-rose-50 text-rose-700 border border-rose-200">
+                            <span className="w-1.5 h-1.5 rounded-full bg-rose-600 mr-1"></span>
+                            Disconnected
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 mr-1"></span>
+                            Connected
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-3 px-3 font-mono font-semibold text-slate-700">
+                        {s.records_count !== undefined && s.records_count !== null ? s.records_count.toLocaleString() : 'Imported'}
+                      </td>
+                      <td className="py-3 px-3 text-slate-500 font-medium">
+                        {s.updated_at ? new Date(s.updated_at).toLocaleTimeString() : 'Just now'}
+                      </td>
+                      <td className="py-3 px-3 text-right relative">
+                        <button
+                          onClick={() => setActiveMenuId(activeMenuId === s.id ? null : s.id)}
+                          disabled={actionRunningId === s.id}
+                          className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-500 hover:text-slate-800 transition-colors disabled:opacity-50"
+                          title="Source Actions"
+                        >
+                          {actionRunningId === s.id ? (
+                            <RefreshCw className="h-4 w-4 animate-spin text-emerald-600" />
+                          ) : (
+                            renderIcon(MoreHorizontal, 'h-4 w-4')
+                          )}
+                        </button>
 
-                {/* Default Reference Connected Sources */}
-                {defaultConnectedSources.map((src, idx) => (
-                  <tr key={idx} className="hover:bg-slate-50/80 transition-colors">
-                    <td className="py-3 px-3 font-bold text-slate-900 flex items-center space-x-2">
-                      <div className={`p-1.5 rounded-md border ${
-                        src.type === 'PostgreSQL' ? 'bg-sky-50 border-sky-200 text-sky-800' :
-                        src.type === 'JSON' ? 'bg-rose-50 border-rose-200 text-rose-800' :
-                        'bg-teal-50 border-teal-200 text-teal-800'
-                      }`}>
-                        {src.type === 'PostgreSQL' ? renderIcon(Database, 'h-3.5 w-3.5') :
-                         src.type === 'JSON' ? renderIcon(Code, 'h-3.5 w-3.5') :
-                         renderIcon(FileText, 'h-3.5 w-3.5')}
-                      </div>
-                      <span>{src.name}</span>
-                    </td>
-                    <td className="py-3 px-3">
-                      {src.status === 'Connected' ? (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 mr-1"></span>
-                          Connected
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-50 text-amber-800 border border-amber-200">
-                          <span className="w-1.5 h-1.5 rounded-full bg-amber-600 mr-1"></span>
-                          Validation Required
-                        </span>
-                      )}
-                    </td>
-                    <td className="py-3 px-3 font-mono font-semibold text-slate-700">{src.records}</td>
-                    <td className="py-3 px-3 text-slate-500 font-medium">{src.lastSync}</td>
-                    <td className="py-3 px-3 text-right">
-                      <button className="p-1 hover:bg-slate-100 rounded text-slate-400 hover:text-slate-600">
-                        {renderIcon(MoreHorizontal, 'h-4 w-4')}
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                        {activeMenuId === s.id && (
+                          <div className="absolute right-3 top-10 w-48 bg-white border border-slate-200 rounded-xl shadow-xl py-1.5 z-50 text-left">
+                            <button
+                              onClick={() => { setActiveMenuId(null); setDetailsDrawerSource(s); }}
+                              className="w-full text-left px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 flex items-center space-x-2"
+                            >
+                              <span>View Details</span>
+                            </button>
+                            <button
+                              onClick={() => handleTestConnectionClick(s)}
+                              className="w-full text-left px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 flex items-center space-x-2"
+                            >
+                              <span>Test Connection</span>
+                            </button>
+                            <button
+                              onClick={() => handleRefreshSchemaClick(s)}
+                              className="w-full text-left px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 flex items-center space-x-2"
+                            >
+                              <span>Refresh Schema</span>
+                            </button>
+                            <button
+                              onClick={() => handlePreviewDataClick(s)}
+                              className="w-full text-left px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 flex items-center space-x-2"
+                            >
+                              <span>Browse Data</span>
+                            </button>
+                            <button
+                              onClick={() => handleSyncNowClick(s)}
+                              className="w-full text-left px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 flex items-center space-x-2"
+                            >
+                              <span>Sync Now</span>
+                            </button>
+                            <div className="border-t border-slate-100 my-1"></div>
+                            <button
+                              onClick={() => { setActiveMenuId(null); setDisconnectModal({ isOpen: true, source: s, loading: false }); }}
+                              className="w-full text-left px-3.5 py-2 text-xs font-semibold text-rose-600 hover:bg-rose-50 flex items-center space-x-2"
+                            >
+                              <span>Disconnect</span>
+                            </button>
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
@@ -940,6 +1125,180 @@ export const DataSourcesPage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Action Feedback Banner */}
+      {actionFeedback && (
+        <div className={`p-4 rounded-xl text-xs font-semibold flex items-center justify-between shadow-xs ${
+          actionFeedback.type === 'success' ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-rose-50 text-rose-800 border border-rose-200'
+        }`}>
+          <span>{actionFeedback.message}</span>
+          <button onClick={() => setActionFeedback(null)} className="font-bold underline hover:opacity-80 cursor-pointer">Dismiss</button>
+        </div>
+      )}
+
+      {/* View Details Right Drawer */}
+      {detailsDrawerSource && (
+        <div className="fixed inset-0 z-50 overflow-hidden bg-slate-900/40 backdrop-blur-xs flex justify-end">
+          <div className="w-full max-w-md bg-white h-full shadow-2xl p-6 overflow-y-auto space-y-6 flex flex-col justify-between">
+            <div className="space-y-6">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+                <div>
+                  <h3 className="text-base font-bold text-slate-900">{detailsDrawerSource.name}</h3>
+                  <p className="text-xs text-slate-500 font-mono">ID: {detailsDrawerSource.id}</p>
+                </div>
+                <button onClick={() => setDetailsDrawerSource(null)} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600">
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              <div className="space-y-4 text-xs">
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-2">
+                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Source Status</span>
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-slate-800">{detailsDrawerSource.type} Connector</span>
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                      detailsDrawerSource.status === 'DISCONNECTED' ? 'bg-rose-50 text-rose-700 border border-rose-200' : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                    }`}>
+                      {detailsDrawerSource.status}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="space-y-2 border-t border-slate-100 pt-3">
+                  <h4 className="font-bold text-slate-900">Connection Metadata</h4>
+                  <div className="grid grid-cols-2 gap-2 font-mono text-[11px]">
+                    <div className="p-2.5 bg-slate-50 rounded-lg">
+                      <span className="text-slate-500 block text-[9px] font-sans">Created</span>
+                      <span className="font-semibold">{new Date(detailsDrawerSource.created_at).toLocaleDateString()}</span>
+                    </div>
+                    <div className="p-2.5 bg-slate-50 rounded-lg">
+                      <span className="text-slate-500 block text-[9px] font-sans">Updated</span>
+                      <span className="font-semibold">{new Date(detailsDrawerSource.updated_at).toLocaleDateString()}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {detailsDrawerSource.connection_config && (
+                  <div className="space-y-2 border-t border-slate-100 pt-3">
+                    <h4 className="font-bold text-slate-900">Sanitized Configuration</h4>
+                    <pre className="p-3 bg-slate-900 text-slate-100 rounded-xl font-mono text-[11px] overflow-x-auto">
+                      {JSON.stringify(detailsDrawerSource.connection_config, null, 2)}
+                    </pre>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="pt-4 border-t border-slate-100">
+              <button onClick={() => setDetailsDrawerSource(null)} className="w-full py-2.5 bg-slate-900 hover:bg-slate-950 text-white font-bold rounded-xl text-xs cursor-pointer">
+                Close Details
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Preview / Browse Data Modal */}
+      {previewModal.isOpen && (
+        <div className="fixed inset-0 z-50 overflow-hidden bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="w-full max-w-4xl bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[85vh]">
+            <div className="p-5 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-bold text-slate-900">Browse Data: {previewModal.source?.name}</h3>
+                <p className="text-xs text-slate-500">Previewing security records (Max 100 row limit enforced)</p>
+              </div>
+              <button onClick={() => setPreviewModal({ isOpen: false, source: null, loading: false, columns: [], records: [] })} className="p-1.5 rounded-lg hover:bg-slate-200 text-slate-500">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="p-5 overflow-auto flex-1 text-xs max-w-full">
+              {previewModal.loading ? (
+                <div className="py-12 text-center text-slate-500 font-medium flex items-center justify-center space-x-2">
+                  <RefreshCw className="h-4 w-4 animate-spin text-emerald-600" />
+                  <span>Loading data preview...</span>
+                </div>
+              ) : previewModal.records.length > 0 ? (
+                <div className="overflow-x-auto max-w-full border border-slate-200 rounded-lg">
+                  <table className="w-full text-left border-collapse font-sans min-w-[600px]">
+                    <thead>
+                      <tr className="bg-slate-100 text-slate-700 font-bold uppercase text-[10px]">
+                        {previewModal.columns.map((col, idx) => (
+                          <th key={idx} className="p-2 border border-slate-200">{col}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {previewModal.records.map((r, rIdx) => (
+                        <tr key={rIdx} className="hover:bg-slate-50">
+                          {previewModal.columns.map((col, cIdx) => (
+                            <td key={cIdx} className="p-2 border border-slate-200 font-mono text-[11px] text-slate-800">
+                              {typeof r[col] === 'object' ? JSON.stringify(r[col]) : String(r[col] ?? '')}
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="py-12 text-center text-slate-500 font-medium">
+                  {previewModal.message || "No preview records available for this data source."}
+                </div>
+              )}
+            </div>
+
+            <div className="p-4 bg-slate-50 border-t border-slate-200 flex justify-end">
+              <button onClick={() => setPreviewModal({ isOpen: false, source: null, loading: false, columns: [], records: [] })} className="px-4 py-2 bg-slate-900 hover:bg-slate-950 text-white font-bold rounded-xl text-xs cursor-pointer">
+                Close Preview
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Disconnect Confirmation Modal */}
+      {disconnectModal.isOpen && disconnectModal.source && (
+        <div className="fixed inset-0 z-50 overflow-hidden bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl border border-slate-200 p-6 space-y-5">
+            <div className="flex items-center space-x-3 text-rose-600">
+              <div className="p-2 bg-rose-50 border border-rose-200 rounded-xl">
+                <AlertTriangle className="h-6 w-6" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-slate-900">Disconnect Data Source?</h3>
+                <p className="text-xs text-slate-500 font-medium">{disconnectModal.source.name}</p>
+              </div>
+            </div>
+
+            <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 space-y-2 leading-relaxed">
+              <p className="font-bold">Disconnect Semantics:</p>
+              <ul className="list-disc pl-4 space-y-1 text-[11px]">
+                <li>Future ingestion and synchronization from this source will stop.</li>
+                <li>Stored security telemetry already imported will <strong>NOT</strong> be deleted.</li>
+                <li>Historical alerts remain intact in your SOC workspace evidence.</li>
+              </ul>
+            </div>
+
+            <div className="flex items-center justify-end space-x-3 pt-2">
+              <button
+                onClick={() => setDisconnectModal({ isOpen: false, source: null, loading: false })}
+                disabled={disconnectModal.loading}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmDisconnectAction}
+                disabled={disconnectModal.loading}
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl text-xs transition-colors flex items-center space-x-1.5 cursor-pointer"
+              >
+                {disconnectModal.loading ? 'Disconnecting...' : 'Disconnect Source'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

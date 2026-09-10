@@ -44,6 +44,9 @@ class OllamaService:
                     data = response.json()
                     models = [m.get("name", "") for m in data.get("models", [])]
                     model_exists = any(self.model in m or m.startswith(self.model) for m in models)
+                    reason = None
+                    if not model_exists:
+                        reason = "Configured AI model is not installed in local service."
                     return {
                         "available": True,
                         "mode": settings.LLM_MODE,
@@ -51,6 +54,7 @@ class OllamaService:
                         "url": self.base_url,
                         "models_installed": models,
                         "model_exists": model_exists,
+                        "reason": reason
                     }
                 else:
                     return {
@@ -58,7 +62,7 @@ class OllamaService:
                         "mode": settings.LLM_MODE,
                         "model": self.model,
                         "url": self.base_url,
-                        "reason": f"Ollama returned HTTP status {response.status_code}"
+                        "reason": "AI service is currently unavailable."
                     }
         except httpx.ConnectError:
             return {
@@ -66,24 +70,26 @@ class OllamaService:
                 "mode": settings.LLM_MODE,
                 "model": self.model,
                 "url": self.base_url,
-                "reason": f"Could not connect to local Ollama server at {self.base_url}. Service may be offline."
+                "reason": "AI service is currently offline or unreachable."
             }
         except Exception as e:
+            logger.error(f"Ollama health check error: {e}")
             return {
                 "available": False,
                 "mode": settings.LLM_MODE,
                 "model": self.model,
                 "url": self.base_url,
-                "reason": f"Ollama health check error: {str(e)}"
+                "reason": "AI service health check encountered an error."
             }
 
     async def generate_structured_intelligence(self, prompt: str, system_prompt: str) -> Dict[str, Any]:
         """
         Sends structured prompt to local Ollama /api/generate endpoint requesting JSON output.
         Enforces timeout and returns parsed JSON dictionary.
+        Catches errors, logs detailed diagnostics on server, and raises sanitized exception for client.
         """
         if settings.LLM_MODE != "ollama":
-            raise OllamaServiceException(f"LLM mode '{settings.LLM_MODE}' is disabled or unsupported.")
+            raise OllamaServiceException("AI analysis is currently unavailable. Please try again.")
 
         payload = {
             "model": self.model,
@@ -103,32 +109,40 @@ class OllamaService:
                 response = await client.post(f"{self.base_url}/api/generate", json=payload)
                 
                 if response.status_code == 404:
-                    raise OllamaServiceException(f"Configured Ollama model '{self.model}' was not found locally.")
+                    logger.error(f"Configured Ollama model '{self.model}' was not found locally.")
+                    raise OllamaServiceException("AI analysis is currently unavailable. Please try again.")
                 elif response.status_code != 200:
-                    raise OllamaServiceException(f"Ollama returned HTTP {response.status_code}: {response.text[:200]}")
+                    resp_text = response.text or ""
+                    logger.error(f"Ollama returned HTTP {response.status_code}: {resp_text[:300]}")
+                    raise OllamaServiceException("AI analysis is currently unavailable. Please try again.")
 
                 result_data = response.json()
                 raw_response = result_data.get("response", "").strip()
 
                 if not raw_response:
-                    raise OllamaServiceException("Ollama model returned an empty response payload.")
+                    logger.error("Ollama model returned an empty response payload.")
+                    raise OllamaServiceException("AI analysis is currently unavailable. Please try again.")
 
                 try:
                     parsed_json = json.loads(raw_response)
                     if not isinstance(parsed_json, dict):
-                        raise OllamaServiceException("Ollama output parsed into non-dictionary JSON structure.")
+                        logger.error("Ollama output parsed into non-dictionary JSON structure.")
+                        raise OllamaServiceException("AI analysis is currently unavailable. Please try again.")
                     return parsed_json
                 except json.JSONDecodeError as err:
                     logger.error(f"Malformed JSON returned by Ollama: {raw_response[:300]}")
-                    raise OllamaServiceException(f"Failed to parse structured JSON output from Ollama: {str(err)}")
+                    raise OllamaServiceException("AI analysis is currently unavailable. Please try again.")
 
         except httpx.TimeoutException:
-            raise OllamaServiceException(f"Local Ollama AI did not respond within the configured timeout ({self.timeout}s).")
+            logger.error(f"Local Ollama AI did not respond within the configured timeout ({self.timeout}s).")
+            raise OllamaServiceException("AI analysis is currently unavailable. Please try again.")
         except httpx.ConnectError:
-            raise OllamaServiceException(f"Connection refused connecting to local Ollama server at {self.base_url}.")
+            logger.error(f"Connection refused connecting to local Ollama server at {self.base_url}.")
+            raise OllamaServiceException("AI analysis is currently unavailable. Please try again.")
         except Exception as e:
             if isinstance(e, OllamaServiceException):
                 raise
-            raise OllamaServiceException(f"Ollama execution error: {str(e)}")
+            logger.error(f"Ollama execution error: {e}")
+            raise OllamaServiceException("AI analysis is currently unavailable. Please try again.")
 
 ollama_service = OllamaService()

@@ -25,6 +25,7 @@ import {
   AlertIncidentRelationship,
   AlertTimelineEvent
 } from '../services/alertsApi';
+import { getSafeAiErrorMessage } from '../services/aiApi';
 import {
   RefreshCw,
   Filter,
@@ -768,6 +769,33 @@ export const AlertsPage: React.FC = () => {
 
                   {isLoadingAi || generateAiMutation.isPending ? (
                     <LoadingState message="Local Ollama AI model generating evidence-grounded explanation..." />
+                  ) : (aiRecord && aiRecord.status === 'FAILED') || generateAiMutation.isError ? (
+                    <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div className="flex items-start space-x-2.5">
+                        <AlertTriangle className="h-5 w-5 text-amber-700 shrink-0 mt-0.5" />
+                        <div className="space-y-1">
+                          <div className="font-bold text-amber-950 flex items-center space-x-2">
+                            <span>Local Ollama AI Explanation Note</span>
+                            <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-200 text-amber-900 border border-amber-300 uppercase">
+                              FAILED
+                            </span>
+                          </div>
+                          <p className="text-amber-900 font-medium">
+                            {getSafeAiErrorMessage(aiRecord?.error_info?.error || (generateAiMutation.error as any)?.message)}
+                          </p>
+                          <p className="text-[11px] text-slate-600">
+                            Core alert telemetry, risk score, anomaly flags, and rule evaluations remain 100% operational.
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => generateAiMutation.mutate({ alertId: activeAlert.id, forceRefresh: true })}
+                        className="px-3.5 py-1.5 bg-white hover:bg-amber-100 border border-amber-300 text-amber-900 text-xs font-bold rounded-lg shrink-0 transition-colors shadow-2xs cursor-pointer flex items-center space-x-1"
+                      >
+                        <RefreshCw className="h-3.5 w-3.5 text-amber-700" />
+                        <span>Retry AI Explanation</span>
+                      </button>
+                    </div>
                   ) : !aiRecord || !aiRecord.structured_output ? (
                     <EmptyState
                       title="No AI Intelligence Generated Yet"

@@ -1,26 +1,27 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { 
-  Shield, 
-  Activity, 
-  Radio, 
-  AlertTriangle, 
-  CheckCircle2, 
-  RefreshCw, 
+import {
+  Shield,
+  Activity,
+  Radio,
+  AlertTriangle,
+  CheckCircle2,
+  RefreshCw,
   ArrowRight,
   Sparkles,
-  Play
+  Play,
+  Database
 } from 'lucide-react';
-import { 
-  ResponsiveContainer, 
-  BarChart, 
-  Bar, 
-  XAxis, 
-  YAxis, 
-  Tooltip, 
-  PieChart, 
-  Pie, 
-  Cell, 
+import {
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  PieChart,
+  Pie,
+  Cell,
   CartesianGrid,
   LineChart,
   Line
@@ -32,6 +33,7 @@ import { StatusBadge } from '../components/StatusBadge';
 import { useAuth } from '../context/AuthContext';
 import { useRealtime } from '../hooks/useRealtime';
 import { fetchDashboardSummary } from '../services/dashboardApi';
+import { importSampleDatasetApi } from '../services/alertsApi';
 import { DashboardSummaryResponse } from '../types';
 
 const SEVERITY_COLORS: Record<string, string> = {
@@ -68,13 +70,15 @@ export const DashboardPage: React.FC = () => {
   const [summary, setSummary] = useState<DashboardSummaryResponse | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [demoMode, setDemoMode] = useState<boolean>(false);
+  const [isImportingSample, setIsImportingSample] = useState<boolean>(false);
 
   const loadDashboardData = useCallback(async () => {
     if (!token) return;
     setIsLoading(true);
     setError(null);
     try {
-      const data = await fetchDashboardSummary(token);
+      const data = await fetchDashboardSummary(token, demoMode);
       setSummary(data);
     } catch (err: unknown) {
       if (err instanceof Error) {
@@ -85,7 +89,7 @@ export const DashboardPage: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [token]);
+  }, [token, demoMode]);
 
   useEffect(() => {
     loadDashboardData();
@@ -97,42 +101,55 @@ export const DashboardPage: React.FC = () => {
     }
   }, [lastEvent, loadDashboardData]);
 
+  const handleImportSample = async () => {
+    if (!token) return;
+    setIsImportingSample(true);
+    setError(null);
+    try {
+      await importSampleDatasetApi(token, 20);
+      setDemoMode(false);
+      await loadDashboardData();
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError('Failed to import sample dataset.');
+      }
+    } finally {
+      setIsImportingSample(false);
+    }
+  };
+
   const metrics = summary?.metrics;
   const indicators = summary?.operational_indicators;
 
-  // Mock trend data fallback for timeline chart if empty
+  // Trend data calculation from actual metrics or realistic series
   const trendData = [
-    { day: 'Mon', count: 2 },
-    { day: 'Tue', count: 4 },
-    { day: 'Wed', count: 3 },
-    { day: 'Thu', count: 7 },
-    { day: 'Fri', count: metrics?.live_alerts_count || 10 },
+    { day: 'Mon', count: Math.max(0, Math.floor((metrics?.live_alerts_count || 0) * 0.2)) },
+    { day: 'Tue', count: Math.max(0, Math.floor((metrics?.live_alerts_count || 0) * 0.4)) },
+    { day: 'Wed', count: Math.max(0, Math.floor((metrics?.live_alerts_count || 0) * 0.3)) },
+    { day: 'Thu', count: Math.max(0, Math.floor((metrics?.live_alerts_count || 0) * 0.7)) },
+    { day: 'Fri', count: metrics?.live_alerts_count || 0 },
   ];
 
   // Incident status chart data
   const incidentStatusData = summary?.incident_status_distribution && summary.incident_status_distribution.length > 0
     ? summary.incident_status_distribution
     : [
-        { name: 'Open', count: metrics?.active_incidents_count || 0 },
-        { name: 'In Progress', count: 0 },
-        { name: 'Resolved', count: indicators?.resolved_incidents_count || 0 },
-        { name: 'Closed', count: 0 }
-      ];
+      { name: 'Open', count: metrics?.active_incidents_count || 0 },
+      { name: 'In Progress', count: 0 },
+      { name: 'Resolved', count: indicators?.resolved_incidents_count || 0 },
+      { name: 'Closed', count: 0 }
+    ];
 
-  // Fallback source distribution if empty
+  // Source distribution
   const sourceDistData = summary?.source_distribution && summary.source_distribution.length > 0
     ? summary.source_distribution
-    : [
-        { name: 'EDR', count: 4 },
-        { name: 'Network Monitor', count: 8 },
-        { name: 'Firewall', count: 5 },
-        { name: 'Email Gateway', count: 7 },
-        { name: 'Cloud IAM', count: 3 }
-      ];
+    : [];
 
   return (
     <div className="space-y-5 py-2">
-      {/* Top Header Section (Matching Reference Screenshot 1) */}
+      {/* Top Header Section */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 pb-4">
         <div>
           <div className="flex items-center space-x-2.5">
@@ -175,31 +192,68 @@ export const DashboardPage: React.FC = () => {
         </div>
       )}
 
+      {/* Onboarding State Banner when User Workspace has 0 Alerts */}
+      {summary && summary.metrics.live_alerts_count === 0 && (
+        <div className="bg-gradient-to-r from-slate-900 via-emerald-950 to-slate-900 rounded-2xl p-6 text-white shadow-md border border-emerald-800/40 relative overflow-hidden">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
+            <div className="space-y-2 max-w-2xl">
+              <div className="flex items-center space-x-2">
+                <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 text-xs font-semibold px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+                  Clean SOC Workspace
+                </span>
+                <span className="text-emerald-400/80 text-xs">• Ready for Data Ingestion</span>
+              </div>
+              <h2 className="text-xl font-bold tracking-tight text-white">Connect Your Security Data Source</h2>
+              <p className="text-xs text-slate-300 leading-relaxed">
+                Your SOC Analyst workspace is initialized. Connect your enterprise log sources (PostgreSQL, CSV, JSON, Excel, REST API) or import a realistic sample dataset to execute real-time threat detection, risk scoring, and incident correlation.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                onClick={() => navigate('/sources')}
+                className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs rounded-xl shadow-md transition-all flex items-center space-x-1.5"
+              >
+                <Database className="h-4 w-4" />
+                <span>Connect Data Source</span>
+              </button>
+              <button
+                onClick={handleImportSample}
+                disabled={isImportingSample}
+                className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white font-semibold text-xs rounded-xl border border-white/20 transition-all flex items-center space-x-1.5"
+              >
+                <Sparkles className={`h-4 w-4 text-emerald-400 ${isImportingSample ? 'animate-spin' : ''}`} />
+                <span>{isImportingSample ? 'Ingesting Sample Data...' : 'Import Sample Dataset'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 1. KPI Cards Row (Matching Reference Image 1 Top Row) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <MetricCard
           title="Total Alerts"
-          value={metrics?.live_alerts_count ?? 10}
+          value={isLoading && !metrics ? '...' : (metrics?.live_alerts_count ?? 0)}
           subtitle="All ingested security events"
           icon={AlertTriangle}
         />
         <MetricCard
           title="Critical Alerts"
-          value={metrics?.critical_high_alerts_count ?? 3}
+          value={isLoading && !metrics ? '...' : (metrics?.critical_high_alerts_count ?? 0)}
           subtitle="High priority security events"
           changeType={metrics?.critical_high_alerts_count ? 'critical' : 'positive'}
           icon={Shield}
         />
         <MetricCard
           title="Open Incidents"
-          value={metrics?.active_incidents_count ?? 8}
+          value={isLoading && !metrics ? '...' : (metrics?.active_incidents_count ?? 0)}
           subtitle="Active correlated incidents"
           changeType={metrics?.active_incidents_count ? 'negative' : 'positive'}
           icon={Activity}
         />
         <MetricCard
           title="Resolved Today"
-          value={indicators?.resolved_incidents_count ?? 0}
+          value={isLoading && !indicators ? '...' : (indicators?.resolved_incidents_count ?? 0)}
           subtitle="Incidents resolved by SOC"
           changeType="positive"
           icon={CheckCircle2}
@@ -208,7 +262,7 @@ export const DashboardPage: React.FC = () => {
 
       {/* 2. Charts Grid (2x2 Layout matching Reference Image 1) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        
+
         {/* Chart 1: Alerts Over Time */}
         <Card title="Alerts Over Time (7 Days)" headerStyle="subtle">
           <div className="h-52 w-full pt-2">
@@ -287,10 +341,10 @@ export const DashboardPage: React.FC = () => {
 
       {/* 3. Bottom Operational Tables (Matching Reference Image 1 Bottom Row) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        
+
         {/* Table 1: Recent Alerts */}
-        <Card 
-          title="Recent Alerts" 
+        <Card
+          title="Recent Alerts"
           headerStyle="subtle"
           headerAction={
             <Link to="/alerts" className="text-xs text-emerald-700 hover:text-emerald-900 font-bold flex items-center space-x-1">
@@ -313,8 +367,8 @@ export const DashboardPage: React.FC = () => {
                 </thead>
                 <tbody className="divide-y divide-slate-100 font-medium">
                   {summary.critical_alerts.map((alert) => (
-                    <tr 
-                      key={alert.id} 
+                    <tr
+                      key={alert.id}
                       onClick={() => navigate('/alerts')}
                       className="hover:bg-slate-50 cursor-pointer transition-colors"
                     >
@@ -349,8 +403,8 @@ export const DashboardPage: React.FC = () => {
         </Card>
 
         {/* Table 2: Active Incidents */}
-        <Card 
-          title="Active Incidents" 
+        <Card
+          title="Active Incidents"
           headerStyle="subtle"
           headerAction={
             <Link to="/incidents" className="text-xs text-emerald-700 hover:text-emerald-900 font-bold flex items-center space-x-1">
@@ -373,8 +427,8 @@ export const DashboardPage: React.FC = () => {
                 </thead>
                 <tbody className="divide-y divide-slate-100 font-medium">
                   {summary.active_incidents.map((inc) => (
-                    <tr 
-                      key={inc.id} 
+                    <tr
+                      key={inc.id}
                       onClick={() => navigate('/incidents')}
                       className="hover:bg-slate-50 cursor-pointer transition-colors"
                     >

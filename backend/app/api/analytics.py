@@ -279,30 +279,36 @@ def sync_negative_space(db: Session) -> List[NegativeSpaceFinding]:
     all_ns = db.scalars(select(NegativeSpaceFinding).order_by(desc(NegativeSpaceFinding.created_at))).all()
     return list(all_ns)
 
-def compute_operational_analytics(db: Session, days: int = 30) -> OperationalAnalyticsSummarySchema:
-    # Trigger Phase 18 gap & negative space scans
-    sync_execution_gaps(db)
-    sync_negative_space(db)
-
+def compute_operational_analytics(db: Session, days: int = 30, user_ids: Optional[List[uuid.UUID]] = None) -> OperationalAnalyticsSummarySchema:
     # 1. Alert Analytics
-    total_alerts = db.scalar(select(func.count(Alert.id))) or 0
+    alert_q = select(Alert)
+    if user_ids:
+        alert_q = alert_q.where(Alert.submitted_by_user_id.in_(user_ids))
 
-    sev_rows = db.execute(select(Alert.severity, func.count(Alert.id)).group_by(Alert.severity)).all()
+    total_alerts = db.scalar(select(func.count()).select_from(alert_q.subquery())) or 0
+
+    sev_stmt = select(Alert.severity, func.count(Alert.id))
+    cat_stmt = select(Alert.event_category, func.count(Alert.id))
+    if user_ids:
+        sev_stmt = sev_stmt.where(Alert.submitted_by_user_id.in_(user_ids))
+        cat_stmt = cat_stmt.where(Alert.submitted_by_user_id.in_(user_ids))
+
+    sev_rows = db.execute(sev_stmt.group_by(Alert.severity)).all()
     severity_dist = {r[0]: r[1] for r in sev_rows}
 
-    cat_rows = db.execute(select(Alert.event_category, func.count(Alert.id)).group_by(Alert.event_category)).all()
+    cat_rows = db.execute(cat_stmt.group_by(Alert.event_category)).all()
     category_dist = {r[0]: r[1] for r in cat_rows}
 
-    src_rows = db.execute(
-        select(AlertSource.name, func.count(Alert.id))
-        .join(Alert, Alert.source_id == AlertSource.id)
-        .group_by(AlertSource.name)
-    ).all()
+    src_stmt = select(AlertSource.name, func.count(Alert.id)).join(Alert, Alert.source_id == AlertSource.id)
+    if user_ids:
+        src_stmt = src_stmt.where(Alert.submitted_by_user_id.in_(user_ids))
+    src_rows = db.execute(src_stmt.group_by(AlertSource.name)).all()
     source_dist = {r[0]: r[1] for r in src_rows}
 
-    crit_high_count = db.scalar(
-        select(func.count(Alert.id)).where(Alert.severity.in_(["CRITICAL", "HIGH"]))
-    ) or 0
+    crit_high_stmt = select(func.count(Alert.id)).where(Alert.severity.in_(["CRITICAL", "HIGH"]))
+    if user_ids:
+        crit_high_stmt = crit_high_stmt.where(Alert.submitted_by_user_id.in_(user_ids))
+    crit_high_count = db.scalar(crit_high_stmt) or 0
     critical_high_ratio = round((crit_high_count / total_alerts * 100.0), 2) if total_alerts > 0 else 0.0
 
     subq = (
@@ -310,8 +316,10 @@ def compute_operational_analytics(db: Session, days: int = 30) -> OperationalAna
         .where(Alert.user_context.isnot(None))
         .group_by(Alert.event_type, Alert.user_context)
         .having(func.count() > 1)
-        .subquery()
     )
+    if user_ids:
+        subq = subq.where(Alert.submitted_by_user_id.in_(user_ids))
+    subq = subq.subquery()
     repeated_patterns_count = db.scalar(select(func.count()).select_from(subq)) or 0
 
     alert_analytics = AlertAnalyticsSchema(
@@ -324,11 +332,23 @@ def compute_operational_analytics(db: Session, days: int = 30) -> OperationalAna
     )
 
     # 2. Incident Analytics
-    total_incidents = db.scalar(select(func.count(Incident.id))) or 0
-    inc_status_rows = db.execute(select(Incident.status, func.count(Incident.id)).group_by(Incident.status)).all()
+    user_inc_subq = select(IncidentAlert.incident_id).join(Alert, Alert.id == IncidentAlert.alert_id).where(Alert.submitted_by_user_id.in_(user_ids)) if user_ids else None
+
+    inc_q = select(Incident.id)
+    if user_ids:
+        inc_q = inc_q.where(Incident.id.in_(user_inc_subq))
+    total_incidents = db.scalar(select(func.count()).select_from(inc_q.subquery())) or 0
+
+    inc_status_stmt = select(Incident.status, func.count(Incident.id))
+    inc_sev_stmt = select(Incident.severity, func.count(Incident.id))
+    if user_ids:
+        inc_status_stmt = inc_status_stmt.where(Incident.id.in_(user_inc_subq))
+        inc_sev_stmt = inc_sev_stmt.where(Incident.id.in_(user_inc_subq))
+
+    inc_status_rows = db.execute(inc_status_stmt.group_by(Incident.status)).all()
     inc_status_dist = {r[0]: r[1] for r in inc_status_rows}
 
-    inc_sev_rows = db.execute(select(Incident.severity, func.count(Incident.id)).group_by(Incident.severity)).all()
+    inc_sev_rows = db.execute(inc_sev_stmt.group_by(Incident.severity)).all()
     inc_sev_dist = {r[0]: r[1] for r in inc_sev_rows}
 
     resolved_count = inc_status_dist.get("RESOLVED", 0)
@@ -343,11 +363,21 @@ def compute_operational_analytics(db: Session, days: int = 30) -> OperationalAna
     )
 
     # 3. Investigation Analytics
-    total_investigations = db.scalar(select(func.count(Investigation.id))) or 0
-    inv_status_rows = db.execute(select(Investigation.status, func.count(Investigation.id)).group_by(Investigation.status)).all()
+    inv_q = select(Investigation.id)
+    if user_ids:
+        inv_q = inv_q.where(Investigation.created_by_user_id.in_(user_ids))
+    total_investigations = db.scalar(select(func.count()).select_from(inv_q.subquery())) or 0
+
+    inv_status_stmt = select(Investigation.status, func.count(Investigation.id))
+    if user_ids:
+        inv_status_stmt = inv_status_stmt.where(Investigation.created_by_user_id.in_(user_ids))
+    inv_status_rows = db.execute(inv_status_stmt.group_by(Investigation.status)).all()
     inv_status_dist = {r[0]: r[1] for r in inv_status_rows}
 
-    investigations = db.scalars(select(Investigation)).all()
+    inv_stmt = select(Investigation)
+    if user_ids:
+        inv_stmt = inv_stmt.where(Investigation.created_by_user_id.in_(user_ids))
+    investigations = db.scalars(inv_stmt).all()
     durations = [
         (inv.updated_at - inv.created_at).total_seconds() / 60.0
         for inv in investigations
@@ -486,13 +516,16 @@ async def run_operational_analytics(
 @router.get("/operational", response_model=OperationalAnalyticsSummarySchema, status_code=status.HTTP_200_OK)
 async def get_operational_analytics_summary(
     days: int = Query(default=30, ge=1, le=365),
+    demo_mode: Optional[bool] = Query(None),
     db: Session = Depends(get_db),
     current_analyst: Profile = Depends(require_soc_analyst)
 ):
     """
     Retrieves operational analytics summary. Restricted to SOC_ANALYST.
     """
-    return compute_operational_analytics(db, days=days)
+    from app.auth.service import get_workspace_user_ids
+    ws_user_ids = get_workspace_user_ids(db, current_analyst)
+    return compute_operational_analytics(db, days=days, user_ids=ws_user_ids)
 
 @router.get("/findings", response_model=List[OperationalFindingSchema], status_code=status.HTTP_200_OK)
 async def get_operational_findings(

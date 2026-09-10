@@ -147,13 +147,13 @@ class AIService:
             return record
 
         except Exception as err:
-            logger.warning(f"AI Alert Intelligence generation failed for alert {alert_id}: {err}")
+            logger.error(f"AI Alert Intelligence generation failed for alert {alert_id}: {err}")
             record.status = "FAILED"
-            record.error_info = {"error": str(err), "details": "Local Ollama generation failed or model returned invalid format."}
+            record.error_info = {"error": "AI analysis is currently unavailable. Please try again."}
             record.updated_at = utc_now()
             db.commit()
 
-            await publish_ai_intelligence_failed(str(record.id), "ALERT", str(alert_id), str(err))
+            await publish_ai_intelligence_failed(str(record.id), "ALERT", str(alert_id), "AI analysis is currently unavailable. Please try again.")
             return record
 
     async def generate_incident_intelligence(
@@ -250,13 +250,13 @@ class AIService:
             return record
 
         except Exception as err:
-            logger.warning(f"AI Incident Intelligence generation failed for incident {incident_id}: {err}")
+            logger.error(f"AI Incident Intelligence generation failed for incident {incident_id}: {err}")
             record.status = "FAILED"
-            record.error_info = {"error": str(err), "details": "Local Ollama generation failed or model returned invalid format."}
+            record.error_info = {"error": "AI analysis is currently unavailable. Please try again."}
             record.updated_at = utc_now()
             db.commit()
 
-            await publish_ai_intelligence_failed(str(record.id), "INCIDENT", str(incident_id), str(err))
+            await publish_ai_intelligence_failed(str(record.id), "INCIDENT", str(incident_id), "AI analysis is currently unavailable. Please try again.")
             return record
 
     async def generate_investigation_narrative(
@@ -375,13 +375,13 @@ class AIService:
             return record
 
         except Exception as err:
-            logger.warning(f"AI Investigation Narrative generation failed for incident {incident_id}: {err}")
+            logger.error(f"AI Investigation Narrative generation failed for incident {incident_id}: {err}")
             record.status = "FAILED"
-            record.error_info = {"error": str(err), "details": "Local Ollama generation failed or model returned invalid format."}
+            record.error_info = {"error": "AI analysis is currently unavailable. Please try again."}
             record.updated_at = utc_now()
             db.commit()
 
-            await publish_ai_intelligence_failed(str(record.id), "INVESTIGATION", str(incident_id), str(err))
+            await publish_ai_intelligence_failed(str(record.id), "INVESTIGATION", str(incident_id), "AI analysis is currently unavailable. Please try again.")
             return record
 
 ai_service = AIService()

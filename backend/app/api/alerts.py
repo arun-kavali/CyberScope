@@ -117,6 +117,69 @@ async def submit_batch_alerts(
         message=f"Ingestion complete. Accepted: {len(accepted_alerts)}, Duplicates: {duplicate_count}, Rejected: {rejected_count}."
     )
 
+@router.post("/sample-dataset", response_model=AlertBatchResponseSchema, status_code=status.HTTP_201_CREATED)
+async def import_sample_dataset(
+    quantity: int = Query(20, ge=1, le=100),
+    category: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+    current_user: Profile = Depends(require_soc_analyst)
+):
+    """
+    Ingests a realistic sample security dataset into the logged-in user's SOC workspace.
+    Executes full ingestion, validation, triage, scoring, and correlation pipeline.
+    """
+    source_id = _get_or_create_default_source(db)
+    categories = [category.upper()] if (category and category.upper() in EXACT_SCENARIO_CATEGORIES) else ["AUTHENTICATION", "ENDPOINT", "NETWORK", "DATABASE", "EMAIL"]
+    raw_alerts = []
+    per_cat = max(1, quantity // len(categories))
+
+    for cat in categories:
+        scenarios = EXACT_SCENARIO_CATEGORIES.get(cat, ["Brute Force"])
+        for sc in scenarios[:2]:
+            sub = generate_synthetic_alerts_data(
+                category=cat,
+                scenario_name=sc,
+                generation_mode="DEFAULT",
+                severity="HIGH",
+                intent="MALICIOUS",
+                quantity=per_cat
+            )
+            raw_alerts.extend(sub)
+            if len(raw_alerts) >= quantity:
+                break
+        if len(raw_alerts) >= quantity:
+            break
+
+    accepted_alerts = []
+    rejected_count = 0
+    duplicate_count = 0
+
+    for alert_data in raw_alerts:
+        res = process_alert_ingestion(
+            db=db,
+            alert_data=alert_data,
+            source_id=source_id,
+            is_batch=True,
+            submitted_by_user_id=current_user.id
+        )
+        if res.status == "FAILED":
+            rejected_count += 1
+        elif res.status == "DUPLICATE":
+            duplicate_count += 1
+            if res.alert:
+                accepted_alerts.append(res.alert)
+        else:
+            if res.alert:
+                accepted_alerts.append(res.alert)
+
+    return AlertBatchResponseSchema(
+        accepted_count=len(accepted_alerts),
+        rejected_count=rejected_count,
+        duplicate_count=duplicate_count,
+        alerts=accepted_alerts,
+        message=f"Sample dataset imported. Ingested {len(accepted_alerts)} security alerts into your SOC workspace."
+    )
+
 @router.post("/generate-preview", response_model=ScenarioPreviewResponseSchema, status_code=status.HTTP_200_OK)
 async def generate_scenario_preview(
     payload: ScenarioGenerateRequestSchema,
@@ -168,6 +231,7 @@ async def list_submitted_alerts(
     status_filter: Optional[str] = Query(None, alias="status"),
     risk_min: Optional[float] = Query(None),
     risk_max: Optional[float] = Query(None),
+    demo_mode: Optional[bool] = Query(None),
     start_time: Optional[datetime] = Query(None),
     end_time: Optional[datetime] = Query(None),
     db: Session = Depends(get_db),
@@ -179,18 +243,14 @@ async def list_submitted_alerts(
     """
     query = select(Alert)
 
-    # Per-User Data Ownership: ALERT_SOURCE users see their own submitted alerts
+    from app.auth.service import get_workspace_user_ids
+    ws_user_ids = get_workspace_user_ids(db, current_user)
+
+    # Workspace & User Data Ownership Isolation
     if current_user.role and current_user.role.name == "ALERT_SOURCE":
-        if current_user.username == "alert_source":
-            # Default seeded source user coexists with seeded alerts
-            query = query.where(
-                or_(
-                    Alert.submitted_by_user_id == current_user.id,
-                    Alert.submitted_by_user_id.is_(None)
-                )
-            )
-        else:
-            query = query.where(Alert.submitted_by_user_id == current_user.id)
+        query = query.where(Alert.submitted_by_user_id == current_user.id)
+    else:
+        query = query.where(Alert.submitted_by_user_id.in_(ws_user_ids))
 
     if category and category.upper() != "ALL":
         query = query.where(Alert.event_category == category.upper())

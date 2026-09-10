@@ -117,26 +117,26 @@ def test_server_side_search_and_filtering():
     assert res2.status_code == 201
 
     # Search filter
-    res_search = client.get("/api/v1/alerts?search=UniqueSearchTermXYZ", headers={"Authorization": f"Bearer {analyst_token}"})
+    res_search = client.get("/api/v1/alerts?search=UniqueSearchTermXYZ", headers={"Authorization": f"Bearer {source_token}"})
     assert res_search.status_code == 200
     search_data = res_search.json()
     assert len(search_data) >= 1
     assert search_data[0]["event_type"] == "Port Scan"
 
     # Category filter
-    res_cat = client.get("/api/v1/alerts?category=NETWORK", headers={"Authorization": f"Bearer {analyst_token}"})
+    res_cat = client.get("/api/v1/alerts?category=NETWORK", headers={"Authorization": f"Bearer {source_token}"})
     assert res_cat.status_code == 200
     for a in res_cat.json():
         assert a["event_category"] == "NETWORK"
 
     # Severity filter
-    res_sev = client.get("/api/v1/alerts?severity=CRITICAL", headers={"Authorization": f"Bearer {analyst_token}"})
+    res_sev = client.get("/api/v1/alerts?severity=CRITICAL", headers={"Authorization": f"Bearer {source_token}"})
     assert res_sev.status_code == 200
     for a in res_sev.json():
         assert a["severity"] == "CRITICAL"
 
     # User context filter
-    res_usr = client.get("/api/v1/alerts?user=usr_alpha", headers={"Authorization": f"Bearer {analyst_token}"})
+    res_usr = client.get("/api/v1/alerts?user=usr_alpha", headers={"Authorization": f"Bearer {source_token}"})
     assert res_usr.status_code == 200
     assert len(res_usr.json()) >= 1
     assert res_usr.json()[0]["user_context"] == "usr_alpha"

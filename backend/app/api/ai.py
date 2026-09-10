@@ -40,7 +40,7 @@ async def generate_alert_ai_intelligence(
     except ValueError as val_err:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(val_err))
     except Exception as err:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"AI execution error: {str(err)}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="AI analysis is currently unavailable. Please try again.")
 
 @router.post("/incidents/{id}/intelligence", response_model=AIIntelligenceResponse)
 async def generate_incident_ai_intelligence(
@@ -59,7 +59,7 @@ async def generate_incident_ai_intelligence(
     except ValueError as val_err:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(val_err))
     except Exception as err:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"AI execution error: {str(err)}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="AI analysis is currently unavailable. Please try again.")
 
 @router.post("/incidents/{id}/investigation-narrative", response_model=AIIntelligenceResponse)
 async def generate_investigation_narrative(
@@ -78,4 +78,4 @@ async def generate_investigation_narrative(
     except ValueError as val_err:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(val_err))
     except Exception as err:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"AI execution error: {str(err)}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="AI analysis is currently unavailable. Please try again.")

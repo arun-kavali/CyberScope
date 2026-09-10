@@ -1,4 +1,5 @@
 import os
+import uuid
 import logging
 from datetime import datetime, timezone, timedelta
 from typing import Optional
@@ -14,10 +15,13 @@ logger = logging.getLogger("cyberscope.auth")
 def utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
+QUICK_DEV_WORKSPACE_ID = uuid.UUID("00000000-0000-0000-0000-000000000001")
+
 def seed_default_users(db: Session) -> None:
     """
     Safely seeds default application roles (SOC_ANALYST, ALERT_SOURCE)
     and local development accounts if they do not exist yet.
+    Assigns Quick Dev accounts (analyst, alert_source) to QUICK_DEV_WORKSPACE_ID.
     """
     try:
         # Seed Roles
@@ -42,11 +46,14 @@ def seed_default_users(db: Session) -> None:
                 email="analyst@cyberscope.local",
                 full_name="SOC Lead Analyst",
                 role_id=soc_role.id,
+                workspace_id=QUICK_DEV_WORKSPACE_ID,
                 is_active=True,
                 is_superuser=False,
                 hashed_password=hash_password(analyst_pass)
             )
             db.add(analyst_user)
+        elif not analyst_user.workspace_id:
+            analyst_user.workspace_id = QUICK_DEV_WORKSPACE_ID
 
         # Seed Alert Source User
         alert_source_user = db.scalar(select(Profile).where(Profile.username == "alert_source"))
@@ -57,11 +64,14 @@ def seed_default_users(db: Session) -> None:
                 email="source@cyberscope.local",
                 full_name="Synthetic Alert Generator",
                 role_id=source_role.id,
+                workspace_id=QUICK_DEV_WORKSPACE_ID,
                 is_active=True,
                 is_superuser=False,
                 hashed_password=hash_password(source_pass)
             )
             db.add(alert_source_user)
+        elif not alert_source_user.workspace_id:
+            alert_source_user.workspace_id = QUICK_DEV_WORKSPACE_ID
 
         # Seed Default Alert Source Entity
         from app.models.sources import AlertSource
@@ -79,6 +89,14 @@ def seed_default_users(db: Session) -> None:
     except Exception as e:
         db.rollback()
         logger.error(f"Error seeding default users: {e}")
+
+def get_workspace_user_ids(db: Session, current_user: Profile) -> list:
+    from sqlalchemy import or_
+    ws_id = getattr(current_user, "workspace_id", None) or current_user.id
+    user_ids = db.scalars(
+        select(Profile.id).where(or_(Profile.workspace_id == ws_id, Profile.id == ws_id))
+    ).all()
+    return list(user_ids) if user_ids else [current_user.id]
 
 ALLOWED_SIGNUP_ROLES = {"SOC_ANALYST", "ALERT_SOURCE"}
 
@@ -118,7 +136,10 @@ def register_user_account(
         db.add(role)
         db.flush()
 
+    new_id = uuid.uuid4()
     new_profile = Profile(
+        id=new_id,
+        workspace_id=new_id,
         username=clean_username,
         email=clean_email,
         full_name=full_name.strip(),

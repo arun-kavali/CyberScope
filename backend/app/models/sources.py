@@ -33,6 +33,9 @@ class DataSource(Base):
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
+    created_by_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("profiles.id", ondelete="SET NULL"), index=True, nullable=True
+    )
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     type: Mapped[str] = mapped_column(String(50), nullable=False) # CSV, JSON, XLS, XLSX, POSTGRESQL, MONGODB, MYSQL, SUPABASE, REST
     status: Mapped[str] = mapped_column(String(20), default="CONNECTED", nullable=False)

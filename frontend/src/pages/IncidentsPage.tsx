@@ -29,7 +29,7 @@ import {
   IncidentDetailRecord,
   IncidentIntelligenceSummary
 } from '../services/incidentsApi';
-import { generateIncidentAIIntelligence } from '../services/aiApi';
+import { generateIncidentAIIntelligence, getSafeAiErrorMessage } from '../services/aiApi';
 import { createResponseActionApi } from '../services/responseApi';
 
 function formatRelativeTime(dateStr?: string): string {
@@ -142,15 +142,15 @@ export const IncidentsPage: React.FC = () => {
       try {
         const aiRec = await generateIncidentAIIntelligence(selectedIncidentId, forceRefresh, token || undefined);
         if (aiRec.status === 'FAILED') {
-          setAiIntelError(aiRec.error_info?.error || 'Local Ollama AI generation failed.');
+          setAiIntelError(getSafeAiErrorMessage(aiRec.error_info?.error));
         }
       } catch (aiErr: any) {
-        setAiIntelError(aiErr.message || 'Local Ollama AI did not respond within configured timeout.');
+        setAiIntelError(getSafeAiErrorMessage(aiErr.message));
       }
       const res = await fetchIncidentIntelligence(selectedIncidentId, token || undefined);
       setAiIntel(res);
     } catch (err: any) {
-      setAiIntelError(err.message || 'Local AI intelligence generation failed');
+      setAiIntelError(getSafeAiErrorMessage(err.message));
     } finally {
       setAiIntelLoading(false);
     }
@@ -526,8 +526,8 @@ export const IncidentsPage: React.FC = () => {
                     </div>
 
                     {aiIntelError && (
-                      <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-xs">
-                        {aiIntelError}
+                      <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-xs font-medium">
+                        {getSafeAiErrorMessage(aiIntelError)}
                       </div>
                     )}
 

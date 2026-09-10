@@ -53,12 +53,14 @@ class SourcesService:
         db: Session,
         name: str,
         source_type: str,
-        connection_config: Optional[Dict[str, Any]] = None
+        connection_config: Optional[Dict[str, Any]] = None,
+        created_by_user_id: Optional[uuid.UUID] = None
     ) -> DataSource:
         ds = DataSource(
             name=name,
             type=source_type.upper(),
-            status="CONNECTED"
+            status="CONNECTED",
+            created_by_user_id=created_by_user_id
         )
         db.add(ds)
         db.flush()
@@ -218,7 +220,8 @@ class SourcesService:
         field_mappings: Optional[Dict[str, str]] = None,
         content: Optional[bytes] = None,
         filename: str = "",
-        connection_config: Optional[Dict[str, Any]] = None
+        connection_config: Optional[Dict[str, Any]] = None,
+        submitted_by_user_id: Optional[uuid.UUID] = None
     ) -> Dict[str, Any]:
         ds = None
         if source_id:
@@ -229,6 +232,8 @@ class SourcesService:
                     connection_config = ds.connections[0].connection_config
                 if not field_mappings and ds.mappings:
                     field_mappings = ds.mappings[0].field_mappings
+                if not submitted_by_user_id:
+                    submitted_by_user_id = ds.created_by_user_id
 
         if not source_type:
             source_type = "CSV"
@@ -304,7 +309,8 @@ class SourcesService:
                     db=db,
                     alert_data=payload,
                     source_id=source_uuid,
-                    is_batch=True
+                    is_batch=True,
+                    submitted_by_user_id=submitted_by_user_id
                 )
 
                 if ingest_res.status == "SUCCESS":

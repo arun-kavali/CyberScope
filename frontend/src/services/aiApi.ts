@@ -1,5 +1,15 @@
 import { API_BASE_URL } from './api';
 
+/**
+ * Centralized helper for user-facing AI error messages.
+ * ALWAYS returns a clean, safe generic message.
+ * Completely prevents leaking internal C++ stack traces, llama-server crashes,
+ * memory allocation errors, file paths, Python exceptions, or raw JSON.
+ */
+export function getSafeAiErrorMessage(_rawMsg?: any): string {
+  return 'AI analysis is currently unavailable. Please try again.';
+}
+
 function getAuthHeaders(token?: string): Record<string, string> {
   const authToken = token || localStorage.getItem('cyberscope_token') || localStorage.getItem('token');
   return {
@@ -58,10 +68,13 @@ export async function fetchAIStatus(token?: string): Promise<AIStatus> {
     headers: getAuthHeaders(token)
   });
   if (!res.ok) {
-    const errorData = await res.json().catch(() => ({ detail: 'Failed to fetch AI status' }));
-    throw new Error(errorData.detail || `AI status check failed with status ${res.status}`);
+    throw new Error(getSafeAiErrorMessage());
   }
-  return res.json();
+  const data = await res.json();
+  if (!data.available && data.reason) {
+    data.reason = getSafeAiErrorMessage(data.reason);
+  }
+  return data;
 }
 
 export async function generateAlertAIIntelligence(
@@ -74,10 +87,13 @@ export async function generateAlertAIIntelligence(
     headers: getAuthHeaders(token)
   });
   if (!res.ok) {
-    const errorData = await res.json().catch(() => ({ detail: 'Failed to generate alert AI intelligence' }));
-    throw new Error(errorData.detail || `Alert AI intelligence failed with status ${res.status}`);
+    throw new Error(getSafeAiErrorMessage());
   }
-  return res.json();
+  const rec = await res.json();
+  if (rec && rec.status === 'FAILED' && rec.error_info) {
+    rec.error_info.error = getSafeAiErrorMessage(rec.error_info.error);
+  }
+  return rec;
 }
 
 export async function generateIncidentAIIntelligence(
@@ -90,10 +106,13 @@ export async function generateIncidentAIIntelligence(
     headers: getAuthHeaders(token)
   });
   if (!res.ok) {
-    const errorData = await res.json().catch(() => ({ detail: 'Failed to generate incident AI intelligence' }));
-    throw new Error(errorData.detail || `Incident AI intelligence failed with status ${res.status}`);
+    throw new Error(getSafeAiErrorMessage());
   }
-  return res.json();
+  const rec = await res.json();
+  if (rec && rec.status === 'FAILED' && rec.error_info) {
+    rec.error_info.error = getSafeAiErrorMessage(rec.error_info.error);
+  }
+  return rec;
 }
 
 export async function generateInvestigationNarrative(
@@ -106,8 +125,11 @@ export async function generateInvestigationNarrative(
     headers: getAuthHeaders(token)
   });
   if (!res.ok) {
-    const errorData = await res.json().catch(() => ({ detail: 'Failed to generate investigation narrative' }));
-    throw new Error(errorData.detail || `Investigation narrative failed with status ${res.status}`);
+    throw new Error(getSafeAiErrorMessage());
   }
-  return res.json();
+  const rec = await res.json();
+  if (rec && rec.status === 'FAILED' && rec.error_info) {
+    rec.error_info.error = getSafeAiErrorMessage(rec.error_info.error);
+  }
+  return rec;
 }

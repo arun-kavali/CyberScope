@@ -135,6 +135,23 @@ export async function generateScenarioPreviewApi(token: string, payload: Scenari
   return res.json();
 }
 
+export async function importSampleDatasetApi(token: string, quantity: number = 20): Promise<AlertBatchResponse> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/alerts/sample-dataset?quantity=${quantity}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({ detail: 'Failed to import sample dataset' }));
+    throw new Error(errorData.detail || `Server returned status ${res.status}`);
+  }
+
+  return res.json();
+}
+
 export async function getAlertsHistoryApi(
   token: string,
   params: {

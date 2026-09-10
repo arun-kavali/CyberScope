@@ -262,7 +262,7 @@ def test_generate_alert_intelligence_failure_isolation(db_session, sample_alert)
             record = await ai_service.generate_alert_intelligence(db_session, sample_alert.id, force_refresh=True)
 
             assert record.status == "FAILED"
-            assert "Ollama offline" in record.error_info["error"]
+            assert "unavailable" in record.error_info["error"].lower()
             
             refreshed_alert = db_session.query(Alert).filter(Alert.id == sample_alert.id).first()
             assert refreshed_alert is not None
