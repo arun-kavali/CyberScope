@@ -4,24 +4,48 @@ from app.services.sources.base import BaseConnector
 from app.services.sources.file_connectors import infer_python_type
 import os
 
+import re
+from urllib.parse import quote_plus, unquote
+from app.config import settings
+
 class PostgreSQLConnector(BaseConnector):
     def __init__(self, config: Dict[str, Any]):
-        self.config = config
-        self.host = config.get("host", "localhost")
-        self.port = config.get("port", 5432)
-        self.database = config.get("database", "cyberscope")
-        self.user = config.get("user", "postgres")
-        self.password = config.get("password", "")
-        self.table_name = config.get("table_name", "alerts")
-        self.db_url = config.get("connection_string")
+        self.config = config or {}
+        self.host = self.config.get("host", "localhost")
+        self.port = self.config.get("port", 5432)
+        self.database = self.config.get("database", "cyberscope")
+        self.user = self.config.get("user", "postgres")
+        raw_pass = self.config.get("password")
+        self.password = raw_pass or ""
+        self.table_name = self.config.get("table_name", "alerts")
+        self.db_url = self.config.get("connection_string")
 
         if not self.db_url:
-            db_user = os.getenv("POSTGRES_USER", self.user)
-            db_pass = os.getenv("POSTGRES_PASSWORD", self.password)
-            db_host = os.getenv("POSTGRES_HOST", self.host)
-            db_port = os.getenv("POSTGRES_PORT", str(self.port))
-            db_name = os.getenv("POSTGRES_DB", self.database)
-            self.db_url = f"postgresql://{db_user}:{db_pass}@{db_host}:{db_port}/{db_name}"
+            db_user = self.user if self.user and self.user != "[REDACTED]" else os.getenv("POSTGRES_USER", "postgres")
+
+            if raw_pass and raw_pass != "[REDACTED]":
+                db_pass = raw_pass
+            else:
+                db_pass = os.getenv("POSTGRES_PASSWORD")
+                if not db_pass and settings.DATABASE_URL:
+                    pattern = r'^(postgresql(?:\+[a-zA-Z0-9]+)?://)([^:]+):(.*)@([^@/]+):(\d+)/(.*)$'
+                    match = re.match(pattern, settings.DATABASE_URL)
+                    if match:
+                        _, app_user, app_pass, app_host, app_port, app_db = match.groups()
+                        if (self.host in ("localhost", "127.0.0.1", app_host)) and (self.user in (app_user, "postgres", "[REDACTED]", "")):
+                            db_pass = unquote(app_pass)
+
+                if not db_pass:
+                    db_pass = ""
+
+            db_host = self.host
+            db_port = str(self.port)
+            db_name = self.database
+
+            safe_user = quote_plus(unquote(str(db_user)))
+            safe_pass = quote_plus(unquote(str(db_pass)))
+
+            self.db_url = f"postgresql://{safe_user}:{safe_pass}@{db_host}:{db_port}/{db_name}"
 
     def validate_connection(self) -> bool:
         try:
