@@ -4,8 +4,7 @@ from app.services.sources.base import BaseConnector
 from app.services.sources.file_connectors import infer_python_type
 import os
 
-import re
-from urllib.parse import quote_plus, unquote
+from urllib.parse import urlparse, quote
 from app.config import settings
 
 class PostgreSQLConnector(BaseConnector):
@@ -21,29 +20,36 @@ class PostgreSQLConnector(BaseConnector):
         self.db_url = self.config.get("connection_string")
 
         if not self.db_url:
-            db_user = self.user if self.user and self.user != "[REDACTED]" else os.getenv("POSTGRES_USER", "postgres")
+            db_user = None
+            db_pass = None
 
+            # 1. Resolve username & password as a bound credential pair from config if provided
             if raw_pass and raw_pass != "[REDACTED]":
+                db_user = self.user if self.user and self.user != "[REDACTED]" else "postgres"
                 db_pass = raw_pass
             else:
-                db_pass = os.getenv("POSTGRES_PASSWORD")
-                if not db_pass and settings.DATABASE_URL:
-                    pattern = r'^(postgresql(?:\+[a-zA-Z0-9]+)?://)([^:]+):(.*)@([^@/]+):(\d+)/(.*)$'
-                    match = re.match(pattern, settings.DATABASE_URL)
-                    if match:
-                        _, app_user, app_pass, app_host, app_port, app_db = match.groups()
-                        if (self.host in ("localhost", "127.0.0.1", app_host)) and (self.user in (app_user, "postgres", "[REDACTED]", "")):
-                            db_pass = unquote(app_pass)
+                # 2. Resolve bound credential pair from structured parsing of settings.DATABASE_URL
+                if settings.DATABASE_URL:
+                    try:
+                        parsed = urlparse(settings.DATABASE_URL)
+                        app_host = parsed.hostname or "localhost"
+                        if self.host in ("localhost", "127.0.0.1", app_host):
+                            db_user = parsed.username or "postgres"
+                            db_pass = parsed.password or ""
+                    except Exception:
+                        pass
 
-                if not db_pass:
-                    db_pass = ""
+                if db_user is None:
+                    db_user = os.getenv("POSTGRES_USER", self.user if self.user and self.user != "[REDACTED]" else "postgres")
+                    db_pass = os.getenv("POSTGRES_PASSWORD", "")
 
             db_host = self.host
             db_port = str(self.port)
             db_name = self.database
 
-            safe_user = quote_plus(unquote(str(db_user)))
-            safe_pass = quote_plus(unquote(str(db_pass)))
+            # Encode plain credential values using urllib.parse.quote (not quote_plus) for PostgreSQL userinfo
+            safe_user = quote(str(db_user), safe='')
+            safe_pass = quote(str(db_pass), safe='')
 
             self.db_url = f"postgresql://{safe_user}:{safe_pass}@{db_host}:{db_port}/{db_name}"
 

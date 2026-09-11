@@ -184,3 +184,40 @@ def test_audit_events_logged_for_data_source_actions():
         assert "DATA_SOURCE_DISCONNECTED" in actions
     finally:
         db.close()
+
+def test_postgresql_connector_credential_resolution_and_special_chars():
+    from app.services.sources.db_connectors import PostgreSQLConnector
+
+    # 1. Config with special character password (e.g. 'shooter@47!')
+    cfg_special = {
+        "host": "localhost",
+        "port": 5432,
+        "user": "postgres",
+        "password": "shooter@47!",
+        "database": "cyberscope"
+    }
+    connector_special = PostgreSQLConnector(cfg_special)
+    assert connector_special.validate_connection() is True
+
+    # 2. Config with redacted password ('[REDACTED]') resolving bound credentials from DATABASE_URL
+    cfg_redacted = {
+        "host": "localhost",
+        "port": 5432,
+        "user": "[REDACTED]",
+        "password": "[REDACTED]",
+        "database": "cyberscope"
+    }
+    connector_redacted = PostgreSQLConnector(cfg_redacted)
+    assert connector_redacted.validate_connection() is True
+
+    # 3. Invalid host/password returning False cleanly
+    cfg_invalid = {
+        "host": "invalid-host-999.local",
+        "port": 5432,
+        "user": "postgres",
+        "password": "wrongpassword!",
+        "database": "cyberscope"
+    }
+    connector_invalid = PostgreSQLConnector(cfg_invalid)
+    assert connector_invalid.validate_connection() is False
+
