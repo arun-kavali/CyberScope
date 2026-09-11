@@ -97,9 +97,14 @@ export async function fetchIncidents(
   if (status) params.append('status', status);
   if (severity) params.append('severity', severity);
 
-  const res = await fetch(`${API_BASE_URL}/incidents?${params.toString()}`, {
+  let res = await fetch(`${API_BASE_URL}/api/v1/incidents?${params.toString()}`, {
     headers: getAuthHeaders(token)
   });
+  if (res.status === 404) {
+    res = await fetch(`${API_BASE_URL}/incidents?${params.toString()}`, {
+      headers: getAuthHeaders(token)
+    });
+  }
 
   if (!res.ok) {
     const errorData = await res.json().catch(() => ({ detail: 'Failed to fetch incidents' }));
@@ -113,9 +118,14 @@ export async function fetchIncidentById(
   incidentId: string,
   token?: string
 ): Promise<IncidentDetailRecord> {
-  const res = await fetch(`${API_BASE_URL}/incidents/${incidentId}`, {
+  let res = await fetch(`${API_BASE_URL}/api/v1/incidents/${incidentId}`, {
     headers: getAuthHeaders(token)
   });
+  if (res.status === 404) {
+    res = await fetch(`${API_BASE_URL}/incidents/${incidentId}`, {
+      headers: getAuthHeaders(token)
+    });
+  }
 
   if (!res.ok) {
     const errorData = await res.json().catch(() => ({ detail: 'Failed to fetch incident details' }));
@@ -129,9 +139,14 @@ export async function fetchIncidentTimeline(
   incidentId: string,
   token?: string
 ): Promise<IncidentTimelineEvent[]> {
-  const res = await fetch(`${API_BASE_URL}/incidents/${incidentId}/timeline`, {
+  let res = await fetch(`${API_BASE_URL}/api/v1/incidents/${incidentId}/timeline`, {
     headers: getAuthHeaders(token)
   });
+  if (res.status === 404) {
+    res = await fetch(`${API_BASE_URL}/incidents/${incidentId}/timeline`, {
+      headers: getAuthHeaders(token)
+    });
+  }
 
   if (!res.ok) {
     const errorData = await res.json().catch(() => ({ detail: 'Failed to fetch incident timeline' }));
@@ -185,10 +200,16 @@ export async function startInvestigation(
   incidentId: string,
   token?: string
 ): Promise<{ status: string; message: string; investigation: Record<string, any> }> {
-  const res = await fetch(`${API_BASE_URL}/incidents/${incidentId}/start-investigation`, {
+  let res = await fetch(`${API_BASE_URL}/api/v1/incidents/${incidentId}/start-investigation`, {
     method: 'POST',
     headers: getAuthHeaders(token)
   });
+  if (res.status === 404) {
+    res = await fetch(`${API_BASE_URL}/incidents/${incidentId}/start-investigation`, {
+      method: 'POST',
+      headers: getAuthHeaders(token)
+    });
+  }
 
   if (!res.ok) {
     const errorData = await res.json().catch(() => ({ detail: 'Failed to start investigation' }));
@@ -203,11 +224,18 @@ export async function addInvestigationNote(
   noteText: string,
   token?: string
 ): Promise<{ status: string; note: AnalystNote; notes: AnalystNote[] }> {
-  const res = await fetch(`${API_BASE_URL}/incidents/${incidentId}/notes`, {
+  let res = await fetch(`${API_BASE_URL}/api/v1/incidents/${incidentId}/notes`, {
     method: 'POST',
     headers: getAuthHeaders(token),
     body: JSON.stringify({ note: noteText })
   });
+  if (res.status === 404) {
+    res = await fetch(`${API_BASE_URL}/incidents/${incidentId}/notes`, {
+      method: 'POST',
+      headers: getAuthHeaders(token),
+      body: JSON.stringify({ note: noteText })
+    });
+  }
 
   if (!res.ok) {
     const errorData = await res.json().catch(() => ({ detail: 'Failed to add investigation note' }));
@@ -221,9 +249,14 @@ export async function fetchIncidentIntelligence(
   incidentId: string,
   token?: string
 ): Promise<IncidentIntelligenceSummary> {
-  const res = await fetch(`${API_BASE_URL}/incidents/${incidentId}/intelligence`, {
+  let res = await fetch(`${API_BASE_URL}/api/v1/incidents/${incidentId}/intelligence`, {
     headers: getAuthHeaders(token)
   });
+  if (res.status === 404) {
+    res = await fetch(`${API_BASE_URL}/incidents/${incidentId}/intelligence`, {
+      headers: getAuthHeaders(token)
+    });
+  }
 
   if (!res.ok) {
     const errorData = await res.json().catch(() => ({ detail: 'Failed to fetch incident intelligence' }));
@@ -237,10 +270,16 @@ export async function resolveIncident(
   incidentId: string,
   token?: string
 ): Promise<{ status: string; message: string; incident_id: string; new_status: string }> {
-  const res = await fetch(`${API_BASE_URL}/incidents/${incidentId}/resolve`, {
+  let res = await fetch(`${API_BASE_URL}/api/v1/incidents/${incidentId}/resolve`, {
     method: 'POST',
     headers: getAuthHeaders(token)
   });
+  if (res.status === 404) {
+    res = await fetch(`${API_BASE_URL}/incidents/${incidentId}/resolve`, {
+      method: 'POST',
+      headers: getAuthHeaders(token)
+    });
+  }
 
   if (!res.ok) {
     const errorData = await res.json().catch(() => ({ detail: 'Failed to resolve incident' }));

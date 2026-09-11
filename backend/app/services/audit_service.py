@@ -9,6 +9,17 @@ from app.models.identity import Profile
 
 SENSITIVE_KEYS = {"password", "secret", "token", "api_key", "credentials", "auth", "private_key", "service_role_key"}
 
+def make_json_serializable(value: Any) -> Any:
+    if isinstance(value, uuid.UUID):
+        return str(value)
+    elif isinstance(value, datetime):
+        return value.isoformat()
+    elif isinstance(value, dict):
+        return {k: make_json_serializable(v) for k, v in value.items()}
+    elif isinstance(value, (list, tuple, set)):
+        return [make_json_serializable(v) for v in value]
+    return value
+
 def sanitize_audit_metadata(data: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
     if not data:
         return data
@@ -16,10 +27,8 @@ def sanitize_audit_metadata(data: Optional[Dict[str, Any]]) -> Optional[Dict[str
     for key, value in data.items():
         if any(s_key in key.lower() for s_key in SENSITIVE_KEYS):
             sanitized[key] = "[REDACTED]"
-        elif isinstance(value, dict):
-            sanitized[key] = sanitize_audit_metadata(value)
         else:
-            sanitized[key] = value
+            sanitized[key] = make_json_serializable(value)
     return sanitized
 
 class AuditService:
@@ -73,7 +82,8 @@ class AuditService:
         page_size: int = 20,
         action: Optional[str] = None,
         target_type: Optional[str] = None,
-        actor_user_id: Optional[uuid.UUID] = None
+        actor_user_id: Optional[uuid.UUID] = None,
+        user_ids: Optional[List[uuid.UUID]] = None
     ) -> Tuple[int, List[Dict[str, Any]]]:
         query = select(AuditLog)
         count_query = select(func.count(AuditLog.id))
@@ -87,6 +97,10 @@ class AuditService:
         if actor_user_id:
             query = query.where(AuditLog.actor_user_id == actor_user_id)
             count_query = count_query.where(AuditLog.actor_user_id == actor_user_id)
+        elif user_ids:
+            from sqlalchemy import or_
+            query = query.where(or_(AuditLog.actor_user_id.in_(user_ids), AuditLog.actor_user_id.is_(None)))
+            count_query = count_query.where(or_(AuditLog.actor_user_id.in_(user_ids), AuditLog.actor_user_id.is_(None)))
 
         total = db.scalar(count_query) or 0
         offset = (page - 1) * page_size

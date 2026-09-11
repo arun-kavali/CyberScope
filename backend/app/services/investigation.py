@@ -43,6 +43,9 @@ def start_incident_investigation(
     if not incident:
         raise ValueError(f"Incident '{incident_id}' not found")
 
+    if incident.status == "RESOLVED":
+        raise ValueError(f"Cannot start investigation on a RESOLVED incident '{incident.incident_number}'.")
+
     # Check if an active investigation already exists for this incident
     investigation: Optional[Investigation] = None
     if incident.investigation_id:
@@ -92,6 +95,21 @@ def start_incident_investigation(
         publish_investigation_started(investigation, incident, analyst_profile)
     except Exception as pe:
         logger.warning(f"Failed to publish INVESTIGATION_STARTED event: {pe}")
+
+    try:
+        from app.services.audit_service import AuditService
+        AuditService.log_event(
+            db=db,
+            action="INCIDENT_STARTED_INVESTIGATION",
+            actor_user_id=analyst_profile.id,
+            role=analyst_profile.role.name if analyst_profile.role else "SOC_ANALYST",
+            target_type="INCIDENT",
+            target_id=str(incident.id),
+            reason=f"Activated investigation for Incident '{incident.incident_number}'",
+            new_state={"investigation_id": str(investigation.id), "incident_status": incident.status}
+        )
+    except Exception as audit_err:
+        logger.warning(f"Failed to log INCIDENT_STARTED_INVESTIGATION audit event: {audit_err}")
 
     return investigation, incident
 
@@ -163,6 +181,21 @@ def add_investigation_note(
         publish_investigation_note_added(new_note, incident, analyst_profile)
     except Exception as pe:
         logger.warning(f"Failed to publish INVESTIGATION_NOTE_ADDED event: {pe}")
+
+    try:
+        from app.services.audit_service import AuditService
+        AuditService.log_event(
+            db=db,
+            action="INVESTIGATION_NOTE_ADDED",
+            actor_user_id=analyst_profile.id,
+            role=analyst_profile.role.name if analyst_profile.role else "SOC_ANALYST",
+            target_type="INCIDENT",
+            target_id=str(incident.id),
+            reason=f"Investigation note added to Incident '{incident.incident_number}'",
+            new_state={"note_snippet": snippet}
+        )
+    except Exception as audit_err:
+        logger.warning(f"Failed to log INVESTIGATION_NOTE_ADDED audit event: {audit_err}")
 
     return new_note, notes_list
 

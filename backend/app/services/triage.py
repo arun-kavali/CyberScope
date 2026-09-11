@@ -107,6 +107,20 @@ def execute_alert_triage(db: Session, alert: Alert) -> AlertAnalysis:
         except Exception as ce:
             logger.error(f"Failed to evaluate correlation for alert '{alert.alert_code}': {ce}")
 
+        try:
+            from app.services.audit_service import AuditService
+            AuditService.log_event(
+                db=db,
+                action="ALERT_TRIAGED",
+                actor_user_id=alert.submitted_by_user_id,
+                target_type="ALERT",
+                target_id=str(alert.id),
+                reason=f"Alert '{alert.alert_code}' triaged automatically",
+                new_state={"triggered_rules_count": len(triggered_rules), "summary": summary_text[:120]}
+            )
+        except Exception as audit_err:
+            logger.warning(f"Failed to log ALERT_TRIAGED audit log: {audit_err}")
+
         return analysis
 
     except Exception as e:

@@ -387,6 +387,20 @@ def evaluate_and_persist_anomaly(
         except Exception as pe:
             logger.warning(f"Failed to publish ANOMALY_COMPLETED event: {pe}")
 
+        try:
+            from app.services.audit_service import AuditService
+            AuditService.log_event(
+                db=db,
+                action="ANOMALY_DETECTED",
+                actor_user_id=alert.submitted_by_user_id,
+                target_type="ALERT",
+                target_id=str(alert.id),
+                reason=f"Anomaly evaluation completed for alert '{alert.alert_code}' (Score: {composite_score})",
+                new_state={"anomaly_score": composite_score, "status": status_str, "anomalous_features": anomalous_features}
+            )
+        except Exception as audit_err:
+            logger.warning(f"Failed to log ANOMALY_DETECTED audit log: {audit_err}")
+
         return anomaly_record
 
     except Exception as e:

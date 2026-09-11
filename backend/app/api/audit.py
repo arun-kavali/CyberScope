@@ -21,13 +21,17 @@ def list_audit_logs(
     db: Session = Depends(get_db),
     current_user: Profile = Depends(require_soc_analyst)
 ):
+    from app.auth.service import get_workspace_user_ids
+    ws_user_ids = get_workspace_user_ids(db, current_user)
+
     total, items = AuditService.get_audit_logs(
         db=db,
         page=page,
         page_size=page_size,
         action=action,
         target_type=target_type,
-        actor_user_id=actor_user_id
+        actor_user_id=actor_user_id,
+        user_ids=ws_user_ids
     )
 
     formatted_items = [AuditLogResponseSchema(**item) for item in items]

@@ -55,4 +55,14 @@ async def trigger_analysis_for_alert_id(
         )
 
     analysis = execute_alert_triage(db, alert)
+    from app.services.audit_service import AuditService
+    AuditService.log_event(
+        db=db,
+        action="ALERT_REANALYZED",
+        actor_user_id=current_user.id,
+        role=current_user.role.name if current_user.role else "SOC_ANALYST",
+        target_type="ALERT",
+        target_id=str(alert.id),
+        reason=f"Alert '{alert.alert_code}' re-analyzed by SOC Analyst"
+    )
     return analysis

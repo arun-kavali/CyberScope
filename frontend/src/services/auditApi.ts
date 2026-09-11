@@ -36,15 +36,22 @@ export async function getAuditLogsApi(params?: {
   action?: string;
   target_type?: string;
 }, token?: string): Promise<AuditLogListResponse> {
-  const url = new URL(`${API_BASE_URL}/audit`);
-  if (params?.page) url.searchParams.set('page', params.page.toString());
-  if (params?.page_size) url.searchParams.set('page_size', params.page_size.toString());
-  if (params?.action) url.searchParams.set('action', params.action);
-  if (params?.target_type) url.searchParams.set('target_type', params.target_type);
+  const queryParams = new URLSearchParams();
+  if (params?.page) queryParams.set('page', params.page.toString());
+  if (params?.page_size) queryParams.set('page_size', params.page_size.toString());
+  if (params?.action) queryParams.set('action', params.action);
+  if (params?.target_type) queryParams.set('target_type', params.target_type);
 
-  const res = await fetch(url.toString(), {
+  const queryString = queryParams.toString() ? `?${queryParams.toString()}` : '';
+
+  let res = await fetch(`${API_BASE_URL}/api/v1/audit${queryString}`, {
     headers: getHeaders(token),
   });
+  if (res.status === 404) {
+    res = await fetch(`${API_BASE_URL}/audit${queryString}`, {
+      headers: getHeaders(token),
+    });
+  }
   if (!res.ok) {
     throw new Error(`Failed to fetch audit logs: ${res.statusText}`);
   }

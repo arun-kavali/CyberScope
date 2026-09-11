@@ -36,35 +36,55 @@ function getAuthHeaders(token?: string): HeadersInit {
 
 export const reportsApi = {
   getReports: async (page = 1, pageSize = 20, reportType?: string, token?: string): Promise<PaginatedReportsResponse> => {
-    const url = new URL(`${API_BASE_URL}/reports`);
-    url.searchParams.set('page', page.toString());
-    url.searchParams.set('page_size', pageSize.toString());
-    if (reportType) url.searchParams.set('report_type', reportType);
+    const query = new URLSearchParams({
+      page: page.toString(),
+      page_size: pageSize.toString(),
+    });
+    if (reportType) query.set('report_type', reportType);
 
-    const res = await fetch(url.toString(), {
+    let res = await fetch(`${API_BASE_URL}/api/v1/reports?${query.toString()}`, {
       headers: getAuthHeaders(token),
     });
+    if (res.status === 404) {
+      res = await fetch(`${API_BASE_URL}/reports?${query.toString()}`, {
+        headers: getAuthHeaders(token),
+      });
+    }
     if (!res.ok) throw new Error(`Failed to load reports: ${res.statusText}`);
     return res.json();
   },
 
   generateReport: async (req: ReportGenerateRequest, token?: string): Promise<ReportItem> => {
-    const res = await fetch(`${API_BASE_URL}/reports/generate`, {
+    let res = await fetch(`${API_BASE_URL}/api/v1/reports/generate`, {
       method: 'POST',
       headers: getAuthHeaders(token),
       body: JSON.stringify(req),
     });
+    if (res.status === 404) {
+      res = await fetch(`${API_BASE_URL}/reports/generate`, {
+        method: 'POST',
+        headers: getAuthHeaders(token),
+        body: JSON.stringify(req),
+      });
+    }
     if (!res.ok) throw new Error(`Failed to generate report: ${res.statusText}`);
     return res.json();
   },
 
   downloadReport: async (reportId: string, filename: string, token?: string): Promise<void> => {
     const authToken = token || localStorage.getItem('cyberscope_token') || localStorage.getItem('token') || '';
-    const res = await fetch(`${API_BASE_URL}/reports/${reportId}/download`, {
+    let res = await fetch(`${API_BASE_URL}/api/v1/reports/${reportId}/download`, {
       headers: {
         Authorization: `Bearer ${authToken}`,
       },
     });
+    if (res.status === 404) {
+      res = await fetch(`${API_BASE_URL}/reports/${reportId}/download`, {
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+        },
+      });
+    }
     if (!res.ok) throw new Error(`Failed to download report: ${res.statusText}`);
 
     const blob = await res.blob();

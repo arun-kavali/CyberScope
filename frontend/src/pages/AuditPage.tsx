@@ -1,18 +1,23 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { PageHeader } from '../components/PageHeader';
 import { Card } from '../components/Card';
 import { StatusBadge } from '../components/StatusBadge';
-import { User, Search, ChevronLeft, ChevronRight } from 'lucide-react';
+import { User, Search, ChevronLeft, ChevronRight, RefreshCw, Loader2 } from 'lucide-react';
 import { getAuditLogsApi, AuditLogItem } from '../services/auditApi';
+import { useRealtimeContext } from '../context/RealtimeContext';
 
 export const AuditPage: React.FC = () => {
   const [logs, setLogs] = useState<AuditLogItem[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [actionFilter, setActionFilter] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
 
-  const fetchAuditLogs = async (p = page, filter = actionFilter) => {
+  const { lastEvent } = useRealtimeContext();
+
+  const fetchAuditLogs = useCallback(async (p = page, filter = actionFilter) => {
     try {
+      setIsLoading(true);
       const res = await getAuditLogsApi({
         page: p,
         page_size: 20,
@@ -22,12 +27,30 @@ export const AuditPage: React.FC = () => {
       setTotal(res.total);
     } catch (err: any) {
       console.error('Failed to load audit logs', err);
+    } finally {
+      setIsLoading(false);
     }
-  };
+  }, [page, actionFilter]);
 
+  // Initial fetch + refetch on page change
   useEffect(() => {
     fetchAuditLogs(page, actionFilter);
   }, [page]);
+
+  // Auto-polling interval (every 4 seconds) to pick up new audit entries automatically
+  useEffect(() => {
+    const interval = setInterval(() => {
+      fetchAuditLogs(page, actionFilter);
+    }, 4000);
+    return () => clearInterval(interval);
+  }, [fetchAuditLogs, page, actionFilter]);
+
+  // Refetch whenever a new realtime event arrives
+  useEffect(() => {
+    if (lastEvent) {
+      fetchAuditLogs(page, actionFilter);
+    }
+  }, [lastEvent]);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -35,14 +58,11 @@ export const AuditPage: React.FC = () => {
     fetchAuditLogs(1, actionFilter);
   };
 
-  const totalPages = Math.ceil(total / 20) || 1;
+  const handleManualRefresh = () => {
+    fetchAuditLogs(page, actionFilter);
+  };
 
-  const staticAuditLogs = [
-    { id: 'AUD-8801', actor: 'soc_analyst_01', action: 'START_INVESTIGATION', resource: 'Incident INC-2026-0001', ip: '127.0.0.1', timestamp: '2026-09-07 16:02:10 UTC', status: 'SUCCESS' },
-    { id: 'AUD-8802', actor: 'soc_analyst_01', action: 'GENERATE_AI_NARRATIVE', resource: 'Local Ollama (llama3)', ip: '127.0.0.1', timestamp: '2026-09-07 16:02:45 UTC', status: 'SUCCESS' },
-    { id: 'AUD-8803', actor: 'system_core', action: 'TRIAGE_EVALUATION', resource: 'Alert ALT-AUTHENTICATION-001', ip: 'internal', timestamp: '2026-09-07 16:00:00 UTC', status: 'SUCCESS' },
-    { id: 'AUD-8804', actor: 'soc_analyst_01', action: 'ADD_INVESTIGATION_NOTE', resource: 'Incident INC-2026-0001', ip: '127.0.0.1', timestamp: '2026-09-07 16:05:00 UTC', status: 'SUCCESS' },
-  ];
+  const totalPages = Math.ceil(total / 20) || 1;
 
   return (
     <div className="space-y-4">
@@ -52,24 +72,34 @@ export const AuditPage: React.FC = () => {
         phaseBadge="SOC Operations"
         breadcrumbs={[{ label: 'CyberScope' }, { label: 'Audit Trail' }]}
         actions={
-          <form onSubmit={handleSearchSubmit} className="flex items-center space-x-2">
-            <div className="relative">
-              <Search className="h-3.5 w-3.5 absolute left-2.5 top-2 text-slate-400" />
-              <input
-                type="text"
-                placeholder="Filter action (e.g. APPROVE)"
-                value={actionFilter}
-                onChange={(e) => setActionFilter(e.target.value)}
-                className="pl-8 pr-3 py-1 border border-slate-300 rounded text-xs bg-white focus:ring-1 focus:ring-emerald-600 outline-none w-48"
-              />
-            </div>
+          <div className="flex items-center space-x-2">
+            <form onSubmit={handleSearchSubmit} className="flex items-center space-x-2">
+              <div className="relative">
+                <Search className="h-3.5 w-3.5 absolute left-2.5 top-2 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Filter action (e.g. LOGIN, INGEST)"
+                  value={actionFilter}
+                  onChange={(e) => setActionFilter(e.target.value)}
+                  className="pl-8 pr-3 py-1 border border-slate-300 rounded text-xs bg-white focus:ring-1 focus:ring-emerald-600 outline-none w-48"
+                />
+              </div>
+              <button
+                type="submit"
+                className="px-3 py-1 bg-brand-900 text-white rounded text-xs font-semibold hover:bg-brand-950"
+              >
+                Filter
+              </button>
+            </form>
             <button
-              type="submit"
-              className="px-3 py-1 bg-brand-900 text-white rounded text-xs font-semibold hover:bg-brand-950"
+              onClick={handleManualRefresh}
+              disabled={isLoading}
+              className="p-1.5 border border-slate-300 rounded bg-white text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-50"
+              title="Refresh Audit Trail"
             >
-              Filter
+              <RefreshCw className={`h-3.5 w-3.5 ${isLoading ? 'animate-spin text-brand-600' : ''}`} />
             </button>
-          </form>
+          </div>
         }
       />
 
@@ -101,7 +131,7 @@ export const AuditPage: React.FC = () => {
                   <td className="py-2.5 px-3 font-mono text-slate-700">
                     {log.target_type ? `${log.target_type}: ${log.target_id || ''}` : '-'}
                   </td>
-                  <td className="py-2.5 px-3 text-slate-600 truncate max-w-[200px]">{log.reason || '-'}</td>
+                  <td className="py-2.5 px-3 text-slate-600 truncate max-w-[220px]">{log.reason || '-'}</td>
                   <td className="py-2.5 px-3 font-mono text-slate-500 text-[11px]">
                     {new Date(log.timestamp).toLocaleString()}
                   </td>
@@ -110,24 +140,22 @@ export const AuditPage: React.FC = () => {
                   </td>
                 </tr>
               ))}
-              {logs.length === 0 && (
-                staticAuditLogs.map((log) => (
-                  <tr key={log.id} className="hover:bg-slate-50/80 transition-colors">
-                    <td className="py-2.5 px-3 font-mono font-bold text-brand-900">{log.id}</td>
-                    <td className="py-2.5 px-3 font-bold text-slate-900 flex items-center space-x-1">
-                      <User className="h-3 w-3 text-slate-400" />
-                      <span>{log.actor}</span>
-                    </td>
-                    <td className="py-2.5 px-3 font-mono text-slate-600 text-[11px]">SOC_ANALYST</td>
-                    <td className="py-2.5 px-3 font-mono font-semibold text-brand-700 text-[11px]">{log.action}</td>
-                    <td className="py-2.5 px-3 font-mono text-slate-700">{log.resource}</td>
-                    <td className="py-2.5 px-3 text-slate-600 text-[11px]">System action logged</td>
-                    <td className="py-2.5 px-3 font-mono text-slate-500 text-[11px]">{log.timestamp}</td>
-                    <td className="py-2.5 px-3">
-                      <StatusBadge status="healthy" label={log.status} />
-                    </td>
-                  </tr>
-                ))
+              {logs.length === 0 && !isLoading && (
+                <tr>
+                  <td colSpan={8} className="py-8 text-center text-slate-500 font-medium">
+                    No audit records found. Operational and security activity will appear here in chronological order.
+                  </td>
+                </tr>
+              )}
+              {isLoading && logs.length === 0 && (
+                <tr>
+                  <td colSpan={8} className="py-8 text-center text-slate-500 font-medium">
+                    <div className="flex items-center justify-center space-x-2">
+                      <Loader2 className="h-4 w-4 animate-spin text-brand-600" />
+                      <span>Loading audit trail events...</span>
+                    </div>
+                  </td>
+                </tr>
               )}
             </tbody>
           </table>

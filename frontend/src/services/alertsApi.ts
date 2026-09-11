@@ -76,7 +76,7 @@ export interface AlertBatchResponse {
 }
 
 export async function submitSingleAlertApi(token: string, payload: AlertCreatePayload): Promise<AlertRecord> {
-  const res = await fetch(`${API_BASE_URL}/alerts`, {
+  let res = await fetch(`${API_BASE_URL}/api/v1/alerts`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -84,6 +84,16 @@ export async function submitSingleAlertApi(token: string, payload: AlertCreatePa
     },
     body: JSON.stringify(payload),
   });
+  if (res.status === 404) {
+    res = await fetch(`${API_BASE_URL}/alerts`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(payload),
+    });
+  }
 
   if (!res.ok) {
     const errorData = await res.json().catch(() => ({ detail: 'Failed to submit alert' }));
@@ -97,7 +107,7 @@ export async function submitSingleAlertApi(token: string, payload: AlertCreatePa
 }
 
 export async function submitBatchAlertsApi(token: string, alerts: AlertCreatePayload[]): Promise<AlertBatchResponse> {
-  const res = await fetch(`${API_BASE_URL}/alerts/batch`, {
+  let res = await fetch(`${API_BASE_URL}/api/v1/alerts/batch`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -105,6 +115,16 @@ export async function submitBatchAlertsApi(token: string, alerts: AlertCreatePay
     },
     body: JSON.stringify({ alerts }),
   });
+  if (res.status === 404) {
+    res = await fetch(`${API_BASE_URL}/alerts/batch`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ alerts }),
+    });
+  }
 
   if (!res.ok) {
     const errorData = await res.json().catch(() => ({ detail: 'Failed to submit batch alerts' }));
@@ -118,7 +138,7 @@ export async function submitBatchAlertsApi(token: string, alerts: AlertCreatePay
 }
 
 export async function generateScenarioPreviewApi(token: string, payload: ScenarioGeneratePayload): Promise<ScenarioPreviewResponse> {
-  const res = await fetch(`${API_BASE_URL}/alerts/generate-preview`, {
+  let res = await fetch(`${API_BASE_URL}/api/v1/alerts/generate-preview`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -126,6 +146,16 @@ export async function generateScenarioPreviewApi(token: string, payload: Scenari
     },
     body: JSON.stringify(payload),
   });
+  if (res.status === 404) {
+    res = await fetch(`${API_BASE_URL}/alerts/generate-preview`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(payload),
+    });
+  }
 
   if (!res.ok) {
     const errorData = await res.json().catch(() => ({ detail: 'Failed to generate scenario preview' }));
@@ -136,13 +166,22 @@ export async function generateScenarioPreviewApi(token: string, payload: Scenari
 }
 
 export async function importSampleDatasetApi(token: string, quantity: number = 20): Promise<AlertBatchResponse> {
-  const res = await fetch(`${API_BASE_URL}/api/v1/alerts/sample-dataset?quantity=${quantity}`, {
+  let res = await fetch(`${API_BASE_URL}/api/v1/alerts/sample-dataset?quantity=${quantity}`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${token}`,
     },
   });
+  if (res.status === 404) {
+    res = await fetch(`${API_BASE_URL}/alerts/sample-dataset?quantity=${quantity}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+    });
+  }
 
   if (!res.ok) {
     const errorData = await res.json().catch(() => ({ detail: 'Failed to import sample dataset' }));
@@ -187,12 +226,20 @@ export async function getAlertsHistoryApi(
   if (params.start_time) query.append('start_time', params.start_time);
   if (params.end_time) query.append('end_time', params.end_time);
 
-  const res = await fetch(`${API_BASE_URL}/alerts?${query.toString()}`, {
+  let res = await fetch(`${API_BASE_URL}/api/v1/alerts?${query.toString()}`, {
     method: 'GET',
     headers: {
       Authorization: `Bearer ${token}`,
     },
   });
+  if (res.status === 404) {
+    res = await fetch(`${API_BASE_URL}/alerts?${query.toString()}`, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+  }
 
   if (!res.ok) {
     const errorData = await res.json().catch(() => ({ detail: 'Failed to fetch submission history' }));
@@ -203,12 +250,20 @@ export async function getAlertsHistoryApi(
 }
 
 export async function getAlertByIdApi(token: string, alertId: string): Promise<AlertRecord> {
-  const res = await fetch(`${API_BASE_URL}/alerts/${alertId}`, {
+  let res = await fetch(`${API_BASE_URL}/api/v1/alerts/${alertId}`, {
     method: 'GET',
     headers: {
       Authorization: `Bearer ${token}`,
     },
   });
+  if (res.status === 404) {
+    res = await fetch(`${API_BASE_URL}/alerts/${alertId}`, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+  }
 
   if (!res.ok) {
     const errorData = await res.json().catch(() => ({ detail: 'Alert not found' }));
@@ -294,12 +349,20 @@ export interface AlertAnalysisRecord {
 }
 
 export async function getAlertAnalysisApi(token: string, alertId: string): Promise<AlertAnalysisRecord> {
-  const res = await fetch(`${API_BASE_URL}/alerts/${alertId}/analysis`, {
+  let res = await fetch(`${API_BASE_URL}/api/v1/alerts/${alertId}/analysis`, {
     method: 'GET',
     headers: {
       Authorization: `Bearer ${token}`,
     },
   });
+  if (res.status === 404) {
+    res = await fetch(`${API_BASE_URL}/alerts/${alertId}/analysis`, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+  }
 
   if (!res.ok) {
     const errorData = await res.json().catch(() => ({ detail: 'Failed to fetch alert analysis' }));
@@ -310,12 +373,20 @@ export async function getAlertAnalysisApi(token: string, alertId: string): Promi
 }
 
 export async function reanalyzeAlertApi(token: string, alertId: string): Promise<AlertAnalysisRecord> {
-  const res = await fetch(`${API_BASE_URL}/alerts/${alertId}/reanalyze`, {
+  let res = await fetch(`${API_BASE_URL}/api/v1/alerts/${alertId}/reanalyze`, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${token}`,
     },
   });
+  if (res.status === 404) {
+    res = await fetch(`${API_BASE_URL}/alerts/${alertId}/reanalyze`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+  }
 
   if (!res.ok) {
     const errorData = await res.json().catch(() => ({ detail: 'Failed to reanalyze alert' }));
@@ -355,47 +426,77 @@ export interface AlertTimelineEvent {
 }
 
 export async function getRelatedAlertsApi(token: string, alertId: string): Promise<RelatedAlertRecord[]> {
-  const res = await fetch(`${API_BASE_URL}/alerts/${alertId}/related`, {
+  let res = await fetch(`${API_BASE_URL}/api/v1/alerts/${alertId}/related`, {
     method: 'GET',
     headers: { Authorization: `Bearer ${token}` },
   });
+  if (res.status === 404) {
+    res = await fetch(`${API_BASE_URL}/alerts/${alertId}/related`, {
+      method: 'GET',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+  }
   if (!res.ok) return [];
   return res.json();
 }
 
 export async function getAlertIncidentRelationshipApi(token: string, alertId: string): Promise<AlertIncidentRelationship | null> {
-  const res = await fetch(`${API_BASE_URL}/alerts/${alertId}/incident`, {
+  let res = await fetch(`${API_BASE_URL}/api/v1/alerts/${alertId}/incident`, {
     method: 'GET',
     headers: { Authorization: `Bearer ${token}` },
   });
+  if (res.status === 404) {
+    res = await fetch(`${API_BASE_URL}/alerts/${alertId}/incident`, {
+      method: 'GET',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+  }
   if (!res.ok) return null;
   return res.json();
 }
 
 export async function getAlertTimelineApi(token: string, alertId: string): Promise<AlertTimelineEvent[]> {
-  const res = await fetch(`${API_BASE_URL}/alerts/${alertId}/timeline`, {
+  let res = await fetch(`${API_BASE_URL}/api/v1/alerts/${alertId}/timeline`, {
     method: 'GET',
     headers: { Authorization: `Bearer ${token}` },
   });
+  if (res.status === 404) {
+    res = await fetch(`${API_BASE_URL}/alerts/${alertId}/timeline`, {
+      method: 'GET',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+  }
   if (!res.ok) return [];
   return res.json();
 }
 
 export async function getAlertAiRecordApi(token: string, alertId: string): Promise<any | null> {
-  const res = await fetch(`${API_BASE_URL}/alerts/${alertId}/ai`, {
+  let res = await fetch(`${API_BASE_URL}/api/v1/alerts/${alertId}/ai`, {
     method: 'GET',
     headers: { Authorization: `Bearer ${token}` },
   });
+  if (res.status === 404) {
+    res = await fetch(`${API_BASE_URL}/alerts/${alertId}/ai`, {
+      method: 'GET',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+  }
   if (!res.ok) return null;
   return res.json();
 }
 
 export async function generateAlertAiIntelligenceApi(token: string, alertId: string, forceRefresh = false): Promise<any> {
   const query = forceRefresh ? '?force_refresh=true' : '';
-  const res = await fetch(`${API_BASE_URL}/ai/alerts/${alertId}/intelligence${query}`, {
+  let res = await fetch(`${API_BASE_URL}/api/v1/ai/alerts/${alertId}/intelligence${query}`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}` },
   });
+  if (res.status === 404) {
+    res = await fetch(`${API_BASE_URL}/ai/alerts/${alertId}/intelligence${query}`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+  }
   if (!res.ok) {
     const errorData = await res.json().catch(() => ({ detail: 'Failed to generate AI intelligence' }));
     throw new Error(errorData.detail || `Server returned status ${res.status}`);

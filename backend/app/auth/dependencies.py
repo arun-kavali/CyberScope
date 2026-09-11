@@ -53,8 +53,26 @@ class RoleChecker:
     def __init__(self, allowed_roles: List[str]):
         self.allowed_roles = allowed_roles
 
-    def __call__(self, current_user: Profile = Depends(get_current_user)) -> Profile:
+    def __call__(
+        self,
+        current_user: Profile = Depends(get_current_user),
+        db: Session = Depends(get_db)
+    ) -> Profile:
         if not current_user.role or current_user.role.name not in self.allowed_roles:
+            user_role = current_user.role.name if current_user.role else "UNKNOWN"
+            try:
+                from app.services.audit_service import AuditService
+                AuditService.log_event(
+                    db=db,
+                    action="UNAUTHORIZED_ACCESS_ATTEMPT",
+                    actor_user_id=current_user.id,
+                    role=user_role,
+                    target_type="ENDPOINT",
+                    reason=f"Access denied. Required role: {', '.join(self.allowed_roles)} (User role: {user_role})",
+                    audit_metadata={"user_role": user_role, "required_roles": self.allowed_roles}
+                )
+            except Exception:
+                pass
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"Access denied. Required role: {', '.join(self.allowed_roles)}"

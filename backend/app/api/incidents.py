@@ -264,7 +264,21 @@ async def start_investigation_endpoint(
             }
         }
     except ValueError as ve:
-        raise HTTPException(status_code=404, detail=str(ve))
+        err_msg = str(ve)
+        if "RESOLVED" in err_msg:
+            AuditService.log_event(
+                db=db,
+                action="UNAUTHORIZED_ACCESS_ATTEMPT",
+                actor_user_id=current_user.id,
+                role=current_user.role.name if current_user.role else "SOC_ANALYST",
+                target_type="INCIDENT",
+                target_id=str(inc_uuid),
+                reason="Attempted to start investigation on a RESOLVED incident",
+                previous_state={"status": "RESOLVED"},
+                new_state={"status": "RESOLVED"}
+            )
+            raise HTTPException(status_code=400, detail=err_msg)
+        raise HTTPException(status_code=404, detail=err_msg)
 
 @router.post("/{incident_id}/notes", status_code=status.HTTP_201_CREATED)
 async def add_investigation_note_endpoint(

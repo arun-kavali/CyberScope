@@ -29,7 +29,7 @@ import {
   IncidentDetailRecord,
   IncidentIntelligenceSummary
 } from '../services/incidentsApi';
-import { generateIncidentAIIntelligence, getSafeAiErrorMessage } from '../services/aiApi';
+import { generateIncidentAIIntelligence } from '../services/aiApi';
 import { createResponseActionApi } from '../services/responseApi';
 
 function formatRelativeTime(dateStr?: string): string {
@@ -75,7 +75,6 @@ export const IncidentsPage: React.FC = () => {
   // AI Intelligence state for selected incident
   const [aiIntel, setAiIntel] = useState<IncidentIntelligenceSummary | null>(null);
   const [aiIntelLoading, setAiIntelLoading] = useState<boolean>(false);
-  const [aiIntelError, setAiIntelError] = useState<string | null>(null);
 
   // Response action feedback
   const [actionFeedback, setActionFeedback] = useState<string | null>(null);
@@ -109,7 +108,6 @@ export const IncidentsPage: React.FC = () => {
   const handleSelectIncident = async (id: string) => {
     setSelectedIncidentId(id);
     setAiIntel(null);
-    setAiIntelError(null);
     setActionFeedback(null);
     try {
       setDetailLoading(true);
@@ -138,19 +136,15 @@ export const IncidentsPage: React.FC = () => {
     if (!selectedIncidentId) return;
     try {
       setAiIntelLoading(true);
-      setAiIntelError(null);
       try {
-        const aiRec = await generateIncidentAIIntelligence(selectedIncidentId, forceRefresh, token || undefined);
-        if (aiRec.status === 'FAILED') {
-          setAiIntelError(getSafeAiErrorMessage(aiRec.error_info?.error));
-        }
+        await generateIncidentAIIntelligence(selectedIncidentId, forceRefresh, token || undefined);
       } catch (aiErr: any) {
-        setAiIntelError(getSafeAiErrorMessage(aiErr.message));
+        // Silently catch AI generation error
       }
       const res = await fetchIncidentIntelligence(selectedIncidentId, token || undefined);
       setAiIntel(res);
     } catch (err: any) {
-      setAiIntelError(getSafeAiErrorMessage(err.message));
+      // Silently catch error
     } finally {
       setAiIntelLoading(false);
     }
@@ -353,13 +347,15 @@ export const IncidentsPage: React.FC = () => {
                     </td>
                     <td className="py-3 px-3 text-right">
                       <div className="flex items-center justify-end space-x-2">
-                        <button
-                          onClick={(e) => handleStartInvestigation(inc.id, e)}
-                          className="inline-flex items-center space-x-1 text-xs bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 px-2.5 py-1 rounded-md font-semibold transition-colors cursor-pointer"
-                        >
-                          <Search className="h-3.5 w-3.5" />
-                          <span>Investigate</span>
-                        </button>
+                        {inc.status !== 'RESOLVED' && (
+                          <button
+                            onClick={(e) => handleStartInvestigation(inc.id, e)}
+                            className="inline-flex items-center space-x-1 text-xs bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 px-2.5 py-1 rounded-md font-semibold transition-colors cursor-pointer"
+                          >
+                            <Search className="h-3.5 w-3.5" />
+                            <span>Investigate</span>
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -525,11 +521,6 @@ export const IncidentsPage: React.FC = () => {
                       </button>
                     </div>
 
-                    {aiIntelError && (
-                      <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-xs font-medium">
-                        {getSafeAiErrorMessage(aiIntelError)}
-                      </div>
-                    )}
 
                     {aiIntel && (
                       <div className="mt-3 p-4 bg-white border border-blue-200 rounded-xl space-y-3 text-xs text-slate-800 shadow-2xs">
@@ -614,15 +605,17 @@ export const IncidentsPage: React.FC = () => {
                     </div>
 
                     <div className="pt-2 flex flex-col sm:flex-row items-center gap-3">
-                      <button
-                        onClick={(e) => handleStartInvestigation(detailData.id, e)}
-                        className="w-full sm:flex-1 py-2.5 bg-brand-700 hover:bg-brand-800 text-white font-bold text-xs rounded-lg shadow-sm transition-colors flex items-center justify-center space-x-2 cursor-pointer"
-                      >
-                        <Search className="h-4 w-4" />
-                        <span>Start Investigation</span>
-                      </button>
-
                       {detailData.status !== 'RESOLVED' && (
+                        <button
+                          onClick={(e) => handleStartInvestigation(detailData.id, e)}
+                          className="w-full sm:flex-1 py-2.5 bg-brand-700 hover:bg-brand-800 text-white font-bold text-xs rounded-lg shadow-sm transition-colors flex items-center justify-center space-x-2 cursor-pointer"
+                        >
+                          <Search className="h-4 w-4" />
+                          <span>Start Investigation</span>
+                        </button>
+                      )}
+
+                      {detailData.status !== 'RESOLVED' ? (
                         <button
                           onClick={handleResolveIncident}
                           disabled={resolving}
@@ -631,6 +624,11 @@ export const IncidentsPage: React.FC = () => {
                           <CheckCircle2 className={`h-4 w-4 ${resolving ? 'animate-spin' : ''}`} />
                           <span>{resolving ? 'Resolving Incident...' : 'Resolve Incident'}</span>
                         </button>
+                      ) : (
+                        <div className="w-full py-2.5 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg font-bold text-xs text-center flex items-center justify-center space-x-2">
+                          <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                          <span>Incident Resolved</span>
+                        </div>
                       )}
                     </div>
                   </div>

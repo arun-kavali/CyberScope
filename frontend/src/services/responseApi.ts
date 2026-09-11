@@ -42,7 +42,7 @@ export async function getResponsePoliciesApi(): Promise<ResponsePolicyItem[]> {
     headers: getHeaders(),
   });
   if (res.status === 404) {
-    res = await fetch(`${API_BASE_URL}/response/policies`, { headers: getHeaders() });
+    res = await fetch(`${API_BASE_URL}/api/v1/response/policies`, { headers: getHeaders() });
   }
   if (!res.ok) {
     throw new Error(`Failed to fetch response policies: ${res.statusText}`);
@@ -55,7 +55,7 @@ export async function getResponseActionsApi(): Promise<ResponseActionItem[]> {
     headers: getHeaders(),
   });
   if (res.status === 404) {
-    res = await fetch(`${API_BASE_URL}/response/actions`, { headers: getHeaders() });
+    res = await fetch(`${API_BASE_URL}/api/v1/response/actions`, { headers: getHeaders() });
   }
   if (!res.ok) {
     throw new Error(`Failed to fetch response actions: ${res.statusText}`);
@@ -76,7 +76,7 @@ export async function createResponseActionApi(payload: {
     body: JSON.stringify(payload),
   });
   if (res.status === 404) {
-    res = await fetch(`${API_BASE_URL}/response/actions`, {
+    res = await fetch(`${API_BASE_URL}/api/v1/response/actions`, {
       method: 'POST',
       headers: getHeaders(),
       body: JSON.stringify(payload),
@@ -96,7 +96,7 @@ export async function approveResponseActionApi(id: string, reason?: string): Pro
     body: JSON.stringify({ reason: reason || 'Approved by analyst' }),
   });
   if (res.status === 404) {
-    res = await fetch(`${API_BASE_URL}/response/actions/${id}/approve`, {
+    res = await fetch(`${API_BASE_URL}/api/v1/response/actions/${id}/approve`, {
       method: 'POST',
       headers: getHeaders(),
       body: JSON.stringify({ reason: reason || 'Approved by analyst' }),
@@ -116,7 +116,7 @@ export async function rejectResponseActionApi(id: string, reason: string): Promi
     body: JSON.stringify({ reason }),
   });
   if (res.status === 404) {
-    res = await fetch(`${API_BASE_URL}/response/actions/${id}/reject`, {
+    res = await fetch(`${API_BASE_URL}/api/v1/response/actions/${id}/reject`, {
       method: 'POST',
       headers: getHeaders(),
       body: JSON.stringify({ reason }),
@@ -136,7 +136,7 @@ export async function rollbackResponseActionApi(id: string, reason?: string): Pr
     body: JSON.stringify({ reason: reason || 'Rollback requested by analyst' }),
   });
   if (res.status === 404) {
-    res = await fetch(`${API_BASE_URL}/response/actions/${id}/rollback`, {
+    res = await fetch(`${API_BASE_URL}/api/v1/response/actions/${id}/rollback`, {
       method: 'POST',
       headers: getHeaders(),
       body: JSON.stringify({ reason: reason || 'Rollback requested by analyst' }),

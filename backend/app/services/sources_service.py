@@ -73,6 +73,17 @@ class SourcesService:
         db.add(conn)
         db.commit()
         db.refresh(ds)
+
+        from app.services.audit_service import AuditService
+        AuditService.log_event(
+            db=db,
+            action="DATA_SOURCE_CREATED",
+            actor_user_id=created_by_user_id,
+            target_type="DATA_SOURCE",
+            target_id=str(ds.id),
+            reason=f"Created {source_type.upper()} data source '{name}'",
+            new_state={"name": name, "type": source_type.upper(), "status": ds.status}
+        )
         return ds
 
     @staticmethod

@@ -7,7 +7,7 @@ import { API_BASE_URL } from './api';
  * memory allocation errors, file paths, Python exceptions, or raw JSON.
  */
 export function getSafeAiErrorMessage(_rawMsg?: any): string {
-  return 'AI analysis is currently unavailable. Please try again.';
+  return '';
 }
 
 function getAuthHeaders(token?: string): Record<string, string> {
@@ -64,9 +64,14 @@ export interface AIIntelligenceRecord {
 }
 
 export async function fetchAIStatus(token?: string): Promise<AIStatus> {
-  const res = await fetch(`${API_BASE_URL}/ai/status`, {
+  let res = await fetch(`${API_BASE_URL}/api/v1/ai/status`, {
     headers: getAuthHeaders(token)
   });
+  if (res.status === 404) {
+    res = await fetch(`${API_BASE_URL}/ai/status`, {
+      headers: getAuthHeaders(token)
+    });
+  }
   if (!res.ok) {
     throw new Error(getSafeAiErrorMessage());
   }
@@ -82,10 +87,16 @@ export async function generateAlertAIIntelligence(
   forceRefresh: boolean = false,
   token?: string
 ): Promise<AIIntelligenceRecord> {
-  const res = await fetch(`${API_BASE_URL}/ai/alerts/${alertId}/intelligence?force_refresh=${forceRefresh}`, {
+  let res = await fetch(`${API_BASE_URL}/api/v1/ai/alerts/${alertId}/intelligence?force_refresh=${forceRefresh}`, {
     method: 'POST',
     headers: getAuthHeaders(token)
   });
+  if (res.status === 404) {
+    res = await fetch(`${API_BASE_URL}/ai/alerts/${alertId}/intelligence?force_refresh=${forceRefresh}`, {
+      method: 'POST',
+      headers: getAuthHeaders(token)
+    });
+  }
   if (!res.ok) {
     throw new Error(getSafeAiErrorMessage());
   }
@@ -101,10 +112,16 @@ export async function generateIncidentAIIntelligence(
   forceRefresh: boolean = false,
   token?: string
 ): Promise<AIIntelligenceRecord> {
-  const res = await fetch(`${API_BASE_URL}/ai/incidents/${incidentId}/intelligence?force_refresh=${forceRefresh}`, {
+  let res = await fetch(`${API_BASE_URL}/api/v1/ai/incidents/${incidentId}/intelligence?force_refresh=${forceRefresh}`, {
     method: 'POST',
     headers: getAuthHeaders(token)
   });
+  if (res.status === 404) {
+    res = await fetch(`${API_BASE_URL}/ai/incidents/${incidentId}/intelligence?force_refresh=${forceRefresh}`, {
+      method: 'POST',
+      headers: getAuthHeaders(token)
+    });
+  }
   if (!res.ok) {
     throw new Error(getSafeAiErrorMessage());
   }
@@ -120,10 +137,16 @@ export async function generateInvestigationNarrative(
   forceRefresh: boolean = false,
   token?: string
 ): Promise<AIIntelligenceRecord> {
-  const res = await fetch(`${API_BASE_URL}/ai/incidents/${incidentId}/investigation-narrative?force_refresh=${forceRefresh}`, {
+  let res = await fetch(`${API_BASE_URL}/api/v1/ai/incidents/${incidentId}/investigation-narrative?force_refresh=${forceRefresh}`, {
     method: 'POST',
     headers: getAuthHeaders(token)
   });
+  if (res.status === 404) {
+    res = await fetch(`${API_BASE_URL}/ai/incidents/${incidentId}/investigation-narrative?force_refresh=${forceRefresh}`, {
+      method: 'POST',
+      headers: getAuthHeaders(token)
+    });
+  }
   if (!res.ok) {
     throw new Error(getSafeAiErrorMessage());
   }

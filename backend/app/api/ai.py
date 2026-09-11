@@ -23,6 +23,8 @@ async def check_ai_status(
     status_data = await ollama_service.check_availability()
     return status_data
 
+from app.services.audit_service import AuditService
+
 @router.post("/alerts/{id}/intelligence", response_model=AIIntelligenceResponse)
 async def generate_alert_ai_intelligence(
     id: uuid.UUID,
@@ -36,10 +38,30 @@ async def generate_alert_ai_intelligence(
     """
     try:
         record = await ai_service.generate_alert_intelligence(db, id, force_refresh=force_refresh)
+        AuditService.log_event(
+            db=db,
+            action="AI_ANALYSIS_GENERATED",
+            actor_user_id=current_analyst.id,
+            role=current_analyst.role.name if current_analyst.role else "SOC_ANALYST",
+            target_type="ALERT",
+            target_id=str(id),
+            reason="Generated AI intelligence explanation for alert",
+            audit_metadata={"model_used": record.model_name, "force_refresh": force_refresh}
+        )
         return record
     except ValueError as val_err:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(val_err))
     except Exception as err:
+        AuditService.log_event(
+            db=db,
+            action="AI_ANALYSIS_FAILED",
+            actor_user_id=current_analyst.id,
+            role=current_analyst.role.name if current_analyst.role else "SOC_ANALYST",
+            target_type="ALERT",
+            target_id=str(id),
+            reason="AI intelligence generation failed",
+            audit_metadata={"error": str(err)}
+        )
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="AI analysis is currently unavailable. Please try again.")
 
 @router.post("/incidents/{id}/intelligence", response_model=AIIntelligenceResponse)
@@ -55,10 +77,30 @@ async def generate_incident_ai_intelligence(
     """
     try:
         record = await ai_service.generate_incident_intelligence(db, id, force_refresh=force_refresh)
+        AuditService.log_event(
+            db=db,
+            action="AI_ANALYSIS_GENERATED",
+            actor_user_id=current_analyst.id,
+            role=current_analyst.role.name if current_analyst.role else "SOC_ANALYST",
+            target_type="INCIDENT",
+            target_id=str(id),
+            reason="Generated AI summary for incident",
+            audit_metadata={"model_used": record.model_name, "force_refresh": force_refresh}
+        )
         return record
     except ValueError as val_err:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(val_err))
     except Exception as err:
+        AuditService.log_event(
+            db=db,
+            action="AI_ANALYSIS_FAILED",
+            actor_user_id=current_analyst.id,
+            role=current_analyst.role.name if current_analyst.role else "SOC_ANALYST",
+            target_type="INCIDENT",
+            target_id=str(id),
+            reason="AI incident generation failed",
+            audit_metadata={"error": str(err)}
+        )
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="AI analysis is currently unavailable. Please try again.")
 
 @router.post("/incidents/{id}/investigation-narrative", response_model=AIIntelligenceResponse)
@@ -74,8 +116,28 @@ async def generate_investigation_narrative(
     """
     try:
         record = await ai_service.generate_investigation_narrative(db, id, force_refresh=force_refresh)
+        AuditService.log_event(
+            db=db,
+            action="AI_ANALYSIS_GENERATED",
+            actor_user_id=current_analyst.id,
+            role=current_analyst.role.name if current_analyst.role else "SOC_ANALYST",
+            target_type="INCIDENT",
+            target_id=str(id),
+            reason="Generated investigation narrative for incident",
+            audit_metadata={"model_used": record.model_name, "force_refresh": force_refresh}
+        )
         return record
     except ValueError as val_err:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(val_err))
     except Exception as err:
+        AuditService.log_event(
+            db=db,
+            action="AI_ANALYSIS_FAILED",
+            actor_user_id=current_analyst.id,
+            role=current_analyst.role.name if current_analyst.role else "SOC_ANALYST",
+            target_type="INCIDENT",
+            target_id=str(id),
+            reason="AI narrative generation failed",
+            audit_metadata={"error": str(err)}
+        )
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="AI analysis is currently unavailable. Please try again.")

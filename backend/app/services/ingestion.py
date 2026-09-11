@@ -78,6 +78,15 @@ def process_alert_ingestion(
     # 1. Input Validation
     val_errors = validate_alert_payload(alert_data)
     if val_errors:
+        from app.services.audit_service import AuditService
+        AuditService.log_event(
+            db=db,
+            action="ALERT_INGESTION_FAILED",
+            actor_user_id=submitted_by_user_id,
+            target_type="ALERT",
+            reason="Alert validation failed",
+            audit_metadata={"issues": val_errors}
+        )
         return IngestionResult(
             status="FAILED",
             alert_id=None,
@@ -177,6 +186,17 @@ def process_alert_ingestion(
     db.add(db_alert)
     db.commit()
     db.refresh(db_alert)
+
+    from app.services.audit_service import AuditService
+    AuditService.log_event(
+        db=db,
+        action="ALERT_INGESTED",
+        actor_user_id=submitted_by_user_id,
+        target_type="ALERT",
+        target_id=str(db_alert.id),
+        reason=f"Alert '{alert_code}' ingested and normalized",
+        new_state={"alert_code": alert_code, "severity": db_alert.severity, "event_type": db_alert.event_type}
+    )
 
     # Publish Phase 8 ALERT_CREATED event to connected SOC Analyst clients
     try:

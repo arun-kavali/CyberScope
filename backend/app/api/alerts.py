@@ -172,6 +172,17 @@ async def import_sample_dataset(
             if res.alert:
                 accepted_alerts.append(res.alert)
 
+    from app.services.audit_service import AuditService
+    AuditService.log_event(
+        db=db,
+        action="SAMPLE_DATASET_INGESTED",
+        actor_user_id=current_user.id,
+        role=current_user.role.name if current_user.role else "SOC_ANALYST",
+        target_type="DATASET",
+        reason=f"Imported sample dataset containing {len(accepted_alerts)} security alerts",
+        audit_metadata={"accepted_count": len(accepted_alerts), "rejected_count": rejected_count, "duplicate_count": duplicate_count}
+    )
+
     return AlertBatchResponseSchema(
         accepted_count=len(accepted_alerts),
         rejected_count=rejected_count,

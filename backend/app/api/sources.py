@@ -171,6 +171,16 @@ def map_source_schema(
         mapping = SourcesService.save_field_mapping(
             db=db, source_id=payload.data_source_id, field_mappings=payload.field_mappings
         )
+        from app.services.audit_service import AuditService
+        AuditService.log_event(
+            db=db,
+            action="DATA_SOURCE_SCHEMA_MAPPED",
+            actor_user_id=current_user.id,
+            target_type="DATA_SOURCE",
+            target_id=str(payload.data_source_id),
+            reason="Saved field mappings for data source",
+            audit_metadata={"mapped_fields_count": len(payload.field_mappings or {})}
+        )
         return FieldMappingResponseSchema(
             data_source_id=mapping.data_source_id,
             field_mappings=mapping.field_mappings or {},
@@ -193,6 +203,16 @@ def validate_source_data(
         field_mappings=payload.field_mappings,
         connection_config=payload.connection_config
     )
+    from app.services.audit_service import AuditService
+    AuditService.log_event(
+        db=db,
+        action="DATA_SOURCE_VALIDATED",
+        actor_user_id=current_user.id,
+        target_type="DATA_SOURCE",
+        target_id=str(payload.data_source_id) if payload.data_source_id else None,
+        reason="Validated data source records against canonical schema",
+        audit_metadata={"valid_count": res.get("valid_count"), "invalid_count": res.get("invalid_count")}
+    )
     return ValidationResponseSchema(**res)
 
 @router.post("/import", response_model=ImportResponseSchema)
@@ -208,6 +228,16 @@ def import_source_data(
         field_mappings=payload.field_mappings,
         connection_config=payload.connection_config,
         submitted_by_user_id=current_user.id
+    )
+    from app.services.audit_service import AuditService
+    AuditService.log_event(
+        db=db,
+        action="DATA_SOURCE_DATA_IMPORTED",
+        actor_user_id=current_user.id,
+        target_type="DATA_SOURCE",
+        target_id=str(payload.data_source_id) if payload.data_source_id else None,
+        reason=f"Imported {res.get('imported_records', 0)} records into canonical pipeline",
+        audit_metadata=res
     )
     return ImportResponseSchema(**res)
 

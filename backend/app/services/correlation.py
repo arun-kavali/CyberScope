@@ -445,6 +445,32 @@ def evaluate_alert_correlation(
         except Exception as pe:
             logger.warning(f"Failed to publish correlation/incident WebSocket event: {pe}")
 
+        try:
+            from app.services.audit_service import AuditService
+            if incident_record:
+                if existing_inc_alert:
+                    AuditService.log_event(
+                        db=db,
+                        action="CORRELATION_INCIDENT_UPDATED",
+                        actor_user_id=alert.submitted_by_user_id,
+                        target_type="INCIDENT",
+                        target_id=str(incident_record.id),
+                        reason=f"Incident '{incident_record.incident_number}' updated with correlated alert '{alert.alert_code}'",
+                        new_state={"incident_number": incident_record.incident_number, "severity": incident_record.severity, "risk_score": float(incident_record.risk_score)}
+                    )
+                else:
+                    AuditService.log_event(
+                        db=db,
+                        action="CORRELATION_INCIDENT_CREATED",
+                        actor_user_id=alert.submitted_by_user_id,
+                        target_type="INCIDENT",
+                        target_id=str(incident_record.id),
+                        reason=f"New Incident '{incident_record.incident_number}' created from correlated alerts",
+                        new_state={"incident_number": incident_record.incident_number, "severity": incident_record.severity, "title": incident_record.title}
+                    )
+        except Exception as audit_err:
+            logger.warning(f"Failed to log correlation audit event: {audit_err}")
+
         return correlation_rec, incident_record
 
     except Exception as e:

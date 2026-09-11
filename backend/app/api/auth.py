@@ -4,8 +4,10 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.models.identity import Profile
 from app.schemas.auth import LoginRequest, SignupRequest, TokenResponse, UserProfileResponse, LogoutResponse
-from app.auth.service import authenticate_user, create_user_session, revoke_session_token, register_user_account
+from app.auth.service import authenticate_user, create_user_session, revoke_session_token, register_user_account, validate_session_token
 from app.auth.dependencies import get_current_user, get_token_from_request
+
+from app.services.audit_service import AuditService
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
@@ -27,6 +29,12 @@ async def signup(payload: SignupRequest, db: Session = Depends(get_db)):
     except ValueError as e:
         error_msg = str(e)
         if "role" in error_msg.lower():
+            AuditService.log_event(
+                db=db,
+                action="UNAUTHORIZED_ACCESS_ATTEMPT",
+                reason=f"Signup failed: {error_msg}",
+                audit_metadata={"username": payload.username, "requested_role": payload.role}
+            )
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail=error_msg
@@ -37,13 +45,25 @@ async def signup(payload: SignupRequest, db: Session = Depends(get_db)):
                 detail=error_msg
             )
 
+    role_name = profile.role.name if profile.role else "SOC_ANALYST"
+    AuditService.log_event(
+        db=db,
+        action="AUTH_SIGNUP",
+        actor_user_id=profile.id,
+        role=role_name,
+        target_type="USER",
+        target_id=str(profile.id),
+        reason=f"User '{profile.username}' registered as {role_name}",
+        new_state={"username": profile.username, "email": profile.email, "role": role_name}
+    )
+
     raw_token = create_user_session(db, profile)
     user_response = UserProfileResponse(
         id=profile.id,
         username=profile.username,
         email=profile.email,
         full_name=profile.full_name,
-        role=profile.role.name if profile.role else "SOC_ANALYST",
+        role=role_name,
         is_active=profile.is_active
     )
 
@@ -61,11 +81,29 @@ async def login(payload: LoginRequest, db: Session = Depends(get_db)):
     """
     profile = authenticate_user(db, payload.username, payload.password)
     if not profile:
+        AuditService.log_event(
+            db=db,
+            action="AUTH_LOGIN_FAILED",
+            reason="Invalid username or password",
+            audit_metadata={"attempted_username": payload.username}
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid username or password.",
             headers={"WWW-Authenticate": "Bearer"}
         )
+
+    role_name = profile.role.name if profile.role else "SOC_ANALYST"
+    AuditService.log_event(
+        db=db,
+        action="AUTH_LOGIN",
+        actor_user_id=profile.id,
+        role=role_name,
+        target_type="USER",
+        target_id=str(profile.id),
+        reason=f"User '{profile.username}' logged in successfully",
+        audit_metadata={"username": profile.username}
+    )
 
     raw_token = create_user_session(db, profile)
     user_response = UserProfileResponse(
@@ -73,7 +111,7 @@ async def login(payload: LoginRequest, db: Session = Depends(get_db)):
         username=profile.username,
         email=profile.email,
         full_name=profile.full_name,
-        role=profile.role.name if profile.role else "SOC_ANALYST",
+        role=role_name,
         is_active=profile.is_active
     )
 
@@ -92,6 +130,18 @@ async def logout(
     Revoke and invalidate the current session token.
     """
     if raw_token:
+        profile = validate_session_token(db, raw_token)
+        if profile:
+            role_name = profile.role.name if profile.role else "SOC_ANALYST"
+            AuditService.log_event(
+                db=db,
+                action="AUTH_LOGOUT",
+                actor_user_id=profile.id,
+                role=role_name,
+                target_type="USER",
+                target_id=str(profile.id),
+                reason=f"User '{profile.username}' logged out"
+            )
         revoke_session_token(db, raw_token)
     return LogoutResponse(message="Session successfully revoked")
 

@@ -18,8 +18,7 @@ import {
   X,
   Sparkles,
   ShieldCheck,
-  CheckSquare,
-  AlertCircle
+  CheckSquare
 } from 'lucide-react';
 import { 
   fetchIncidents, 
@@ -34,7 +33,6 @@ import {
 import {
   fetchAIStatus,
   generateInvestigationNarrative,
-  getSafeAiErrorMessage,
   AIStatus,
   AIIntelligenceRecord
 } from '../services/aiApi';
@@ -66,15 +64,14 @@ export const InvestigationsPage: React.FC = () => {
   // Local AI Intelligence State
   const [aiRecord, setAiRecord] = useState<AIIntelligenceRecord | null>(null);
   const [aiLoading, setAiLoading] = useState<boolean>(false);
-  const [aiError, setAiError] = useState<string | null>(null);
   const [aiStatus, setAiStatus] = useState<AIStatus | null>(null);
 
   const checkOllamaStatus = async () => {
     try {
       const res = await fetchAIStatus(token || undefined);
       setAiStatus(res);
-    } catch (e: any) {
-      setAiStatus({ available: false, mode: 'ollama', model: 'llama3', url: 'http://localhost:11434', reason: getSafeAiErrorMessage() });
+    } catch {
+      setAiStatus({ available: false, mode: 'ollama', model: 'llama3', url: 'http://localhost:11434' });
     }
   };
 
@@ -82,14 +79,10 @@ export const InvestigationsPage: React.FC = () => {
     if (!selectedIncidentId) return;
     try {
       setAiLoading(true);
-      setAiError(null);
       const rec = await generateInvestigationNarrative(selectedIncidentId, forceRefresh, token || undefined);
       setAiRecord(rec);
-      if (rec.status === 'FAILED') {
-        setAiError(getSafeAiErrorMessage(rec.error_info?.error));
-      }
     } catch (err: any) {
-      setAiError(getSafeAiErrorMessage(err.message));
+      // Silently catch error
     } finally {
       setAiLoading(false);
     }
@@ -526,49 +519,6 @@ export const InvestigationsPage: React.FC = () => {
                     <p className="text-[11px] leading-relaxed">{aiRecord.structured_output.uncertainty || 'Based strictly on observed evidence; further context required.'}</p>
                   </div>
                 </div>
-              </div>
-            ) : (aiRecord && aiRecord.status === 'FAILED') || aiError ? (
-              <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
-                <div className="flex items-start space-x-2.5">
-                  <AlertTriangle className="h-5 w-5 text-amber-700 shrink-0 mt-0.5" />
-                  <div className="space-y-1">
-                    <div className="font-bold text-amber-950 flex items-center space-x-2">
-                      <span>Local Ollama AI Generation Note</span>
-                      <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-200 text-amber-900 border border-amber-300 uppercase">
-                        FAILED
-                      </span>
-                    </div>
-                    <p className="text-amber-900 font-medium">
-                      {getSafeAiErrorMessage(aiRecord?.error_info?.error || aiError)}
-                    </p>
-                    <p className="text-[11px] text-slate-600">
-                      Core security analysis, deterministic rules, risk scoring, anomaly detection, and incident correlation remain 100% operational.
-                    </p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => handleGenerateAINarrative(true)}
-                  className="px-3.5 py-1.5 bg-white hover:bg-amber-100 border border-amber-300 text-amber-900 text-xs font-bold rounded-lg shrink-0 transition-colors shadow-2xs cursor-pointer flex items-center space-x-1"
-                >
-                  <RefreshCw className="h-3.5 w-3.5 text-amber-700" />
-                  <span>Retry AI Generation</span>
-                </button>
-              </div>
-            ) : aiStatus && !aiStatus.available ? (
-              <div className="p-4 bg-amber-50/70 border border-amber-200 rounded-xl flex items-center justify-between text-xs text-amber-900">
-                <div className="flex items-center space-x-2">
-                  <AlertCircle className="h-4 w-4 text-amber-700 shrink-0" />
-                  <span>
-                    <strong>Local AI unavailable.</strong> Core security analysis, deterministic rules, risk scoring, anomaly detection, and incident correlation remain fully functional.
-                    {aiStatus.reason && <span className="text-amber-800 block text-[11px] font-medium mt-0.5">({getSafeAiErrorMessage(aiStatus.reason)})</span>}
-                  </span>
-                </div>
-                <button
-                  onClick={() => checkOllamaStatus()}
-                  className="px-3 py-1 bg-white hover:bg-amber-100 border border-amber-300 text-amber-900 text-xs font-semibold rounded-lg shrink-0 transition-colors"
-                >
-                  Retry Health Check
-                </button>
               </div>
             ) : (
               <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between text-xs text-slate-700">
