@@ -1,194 +1,269 @@
 # CyberScope
+### Evidence-Driven Supervisory Intelligence for SOC Assessment
 
-> **"From Security Evidence to Actionable Insight"**
+[![SIH 2026](https://img.shields.io/badge/Smart%20India%20Hackathon-2026-orange)](https://www.sih.gov.in/)
+[![Problem Statement](https://img.shields.io/badge/PS-SIH26157-blue)](https://www.sih.gov.in/)
+[![Category](https://img.shields.io/badge/Category-Software-success)](https://www.sih.gov.in/)
+[![Python](https://img.shields.io/badge/Python-3.x-blue)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/Backend-FastAPI-009688)](https://fastapi.tiangolo.com/)
+[![React](https://img.shields.io/badge/Frontend-React-61DAFB)](https://react.dev/)
+[![PostgreSQL](https://img.shields.io/badge/Database-PostgreSQL-336791)](https://www.postgresql.org/)
+[![Ollama](https://img.shields.io/badge/AI-Ollama-black)](https://ollama.com/)
 
-CyberScope is an evidence-driven cybersecurity intelligence platform that transforms security alerts and operational security evidence into prioritized, explainable insights for Security Operations Center (SOC) Analysts.
-
----
-
-## Architecture & Technology Stack
-
-CyberScope is designed with a clean, decoupled, local-first architecture ensuring offline-capable operations without requiring cloud vendor dependencies.
-
-### Frontend
-- **Framework:** React 18 + TypeScript
-- **Build Tool:** Vite
-- **Styling:** Tailwind CSS (Enterprise Light Green + White Visual System)
-- **Routing:** React Router (`react-router-dom`)
-- **State & Data Fetching:** TanStack Query (`@tanstack/react-query`)
-- **Icons:** Lucide React (`lucide-react`)
-- **Visualization:** Recharts
-
-### Backend
-- **Framework:** Python + FastAPI
-- **Server:** Uvicorn
-- **ORM & Migrations:** SQLAlchemy 2.0 + Alembic
-- **Validation & Settings:** Pydantic v2 + Pydantic Settings
-- **API Protocol:** RESTful API with CORS configuration for local frontend development
-
-### Storage & AI Architecture
-- **Primary Database:** Native Local PostgreSQL 17.11 (Host: `localhost:5432`, Database: `cyberscope`)
-- **Local AI Engine:** Ollama with Llama3 local model (Phase 16)
+> **Smart India Hackathon 2026 — Problem Statement SIH26157**  
+> **Supervisory Analytics Tool for SOC Assessment (SAT-SA)**
 
 ---
 
-## Current Status — Phase 3: Database Schema & Migrations Established
+## 📌 Overview
 
-We are currently at **Phase 3 (Database Schema and Migrations)**.
+**CyberScope** is an evidence-driven supervisory analytics platform designed to assess the operational effectiveness of Security Operations Centers (SOCs).
 
-### What is established:
-- [x] **Phase 1 Foundation:** React + Vite frontend, FastAPI backend, CORS, health endpoint.
-- [x] **Phase 2 Database Foundation:** Native local PostgreSQL 17.11 connection pool, `app.db` SQLAlchemy session management, diagnostic endpoint `GET /api/v1/test/database`.
-- [x] **Phase 3 Relational Schema:** Complete 38-table relational schema implemented across 7 logical domains (Identity, Sources, Evidence, Intelligence, Analytics, Response, Audit/Reports) with Alembic migration `08d35b688e91`.
+Instead of evaluating a SOC only through reported metrics, policies, or manually selected samples, CyberScope analyses **actual operational security evidence** to identify weaknesses, behavioural deviations, missing activity, and areas requiring deeper supervisory examination.
 
-*Note: Authentication, alert ingestion pipelines, analytics engines, AI integration, and response orchestration are scheduled for sequential implementation in Phases 4–24.*
+The platform transforms:
 
----
+**SOC Evidence → Analytics → Findings → Review Priorities**
 
-## Database Migrations (Alembic)
-
-Database schema management is handled via Alembic.
-
-### Checking Migration Status
-```bash
-cd backend
-alembic current
-```
-
-### Applying Migrations
-```bash
-cd backend
-alembic upgrade head
-```
+CyberScope is designed for environments where security evidence may be sensitive and therefore supports **local, offline-first and air-gapped deployment** without requiring cloud-based AI services.
 
 ---
 
-## Directory Structure
+## 🎯 Problem Statement
 
-```
-cyberscope/
-├── frontend/             # React + TypeScript + Vite application
-│   ├── src/
-│   │   ├── components/   # Header, Sidebar, StatusBadge, MetricCard
-│   │   ├── pages/        # HomePage, NotFoundPage
-│   │   ├── layouts/      # AppLayout
-│   │   ├── hooks/        # useHealth
-│   │   ├── services/     # API HTTP client
-│   │   ├── types/        # TypeScript type definitions
-│   │   └── utils/
-│   └── package.json
-├── backend/              # FastAPI application
-│   ├── alembic/          # Alembic migration scripts and env.py
-│   │   └── versions/     # Migration revision scripts (08d35b688e91)
-│   ├── app/
-│   │   ├── api/          # Modular API routers (/health, /test/database, etc.)
-│   │   ├── db/           # SQLAlchemy engine, session maker, DeclarativeBase
-│   │   ├── models/       # ORM Models (identity, sources, evidence, intelligence, analytics, response, audit)
-│   │   ├── auth/         # Auth module shell (Phase 4)
-│   │   ├── schemas/      # Pydantic data schemas
-│   │   ├── services/     # Business logic services
-│   │   └── main.py       # FastAPI application entry point
-│   ├── requirements.txt
-│   └── alembic.ini
-├── ml/                   # Machine learning feature pipelines & models
-├── database/             # Schema definitions, seeds & migrations
-├── data/                 # Sample alerts, cases, assets, and entities
-├── ollama/               # Ollama model configuration scripts
-├── docker/               # Container scripts (optional)
-├── tests/                # Test suites (test_health.py, test_database.py, test_schema.py)
-├── docs/                 # Documentation
-├── scripts/              # Helper & utility scripts
-├── .env.example          # Development environment template
-├── .gitignore
-├── README.md
-├── spec.md               # Product specification (Source of Truth)
-├── prd.md                # Product requirements
-├── design.md             # UI/UX Design system specification
-└── implementationplan.md # Implementation roadmap (Phases 1-24)
-```
+### SIH26157 — Supervisory Analytics Tool for SOC Assessment (SAT-SA)
+
+Traditional SOC assessment can involve large volumes of alerts, cases, investigations, escalations, dispositions, and other operational evidence.
+
+Manual examination of such evidence can be:
+
+- Time-consuming
+- Difficult to scale
+- Dependent on sampling
+- Inconsistent across assessment cycles
+- Unable to easily identify missing operational evidence
+- Less effective at revealing behavioural deviations
+
+The challenge is therefore to develop a system capable of analysing SOC operational evidence and helping supervisors identify potential weaknesses and prioritize areas for examination.
 
 ---
 
-## Getting Started
+# 💡 CyberScope Solution
 
-### 1. Backend Setup
+CyberScope provides a supervisory analytics layer over SOC operational evidence.
 
-1. Navigate to the project root directory.
-2. Create and activate a Python virtual environment:
+The platform can:
 
-```bash
-# Windows
-python -m venv .venv
-.venv\Scripts\activate
+- Ingest security evidence from multiple sources
+- Validate and normalize incoming data
+- Evaluate data quality
+- Perform automated alert triage
+- Calculate risk and confidence indicators
+- Detect anomalous behaviour
+- Correlate related security activity
+- Identify execution gaps
+- Detect negative space
+- Perform peer benchmarking
+- Generate evidence-backed findings
+- Support investigations
+- Provide local AI-assisted explanations
+- Execute controlled response actions
+- Maintain an immutable audit trail
+- Generate reports for supervisory review
 
-# macOS/Linux
-python3 -m venv .venv
-source .venv/bin/activate
-```
+The objective is not to replace human examiners.
 
-3. Install backend dependencies:
+Instead:
 
-```bash
-pip install -r backend/requirements.txt
-```
-
-4. Configure local `.env`:
-
-```env
-DATABASE_URL=postgresql://postgres:YOUR_LOCAL_PASSWORD@localhost:5432/cyberscope
-```
-
-5. Run Alembic migrations:
-
-```bash
-cd backend
-alembic upgrade head
-cd ..
-```
-
-6. Start the FastAPI development server:
-
-```bash
-uvicorn backend.app.main:app --reload --port 8000
-```
-
-7. Verify endpoints:
-- `http://localhost:8000/health` -> `{"status": "healthy", "service": "cyberscope-api"}`
-- `http://localhost:8000/api/v1/test/database` -> `{"database": "connected", "status": "healthy"}`
-
-### 2. Frontend Setup
-
-1. Open a new terminal window.
-2. Navigate to the `frontend/` directory:
-
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
-3. Open http://localhost:5173 in your browser to view the CyberScope dashboard shell.
+> **CyberScope provides evidence-backed intelligence that helps human supervisors make faster, more consistent and better-informed assessment decisions.**
 
 ---
 
-## Running Tests
+# 🧠 Core Capabilities
 
-```bash
-# From project root with virtual environment activated
-pytest tests/backend/
-```
+## 1. Multi-Source Evidence Ingestion
+
+CyberScope supports structured security evidence including:
+
+- CSV
+- JSON
+- XLS
+- XLSX
+- PostgreSQL
+
+The architecture is designed to support additional sources such as:
+
+- MySQL
+- MongoDB
+- Supabase
+- REST APIs
+
+Incoming evidence passes through validation, normalization and data-quality processing.
 
 ---
 
-## Project Specification Documents
+## 2. Alert Generation & Ingestion
 
-- [spec.md](spec.md) — Authoritative product specification
-- [prd.md](prd.md) — Product requirements document
-- [design.md](design.md) — UI/UX design direction (Light Green + White theme)
-- [implementationplan.md](implementationplan.md) — Phase-by-phase development roadmap
+CyberScope supports:
+
+- Individual alert ingestion
+- Batch ingestion
+- Synthetic scenario generation
+- Multiple security scenarios
+- Burst and repeated event generation
+- Alert validation
+- Normalization
+- Fingerprinting
+- Data-quality evaluation
+
+This allows the platform to work with both imported evidence and controlled demonstration scenarios.
 
 ---
 
-## License
+## 3. Automated Alert Triage
 
-Enterprise Proprietary — CyberScope Security Platform.
+Incoming alerts are evaluated using deterministic analytical logic.
+
+The triage pipeline considers:
+
+- Detection rules
+- Alert characteristics
+- Risk indicators
+- Confidence
+- False-positive likelihood
+- Priority
+- Enrichment data
+
+This creates a structured analytical representation of each alert before it reaches higher-level supervisory analytics.
+
+---
+
+## 4. Risk & Confidence Scoring
+
+CyberScope calculates deterministic security indicators including:
+
+- Risk score
+- Confidence score
+- Estimated false-positive likelihood
+- Priority
+
+The scoring process is evidence-based and does not depend on an external AI service.
+
+---
+
+## 5. Anomaly Detection
+
+CyberScope uses machine-learning based anomaly detection to identify unusual operational behaviour.
+
+The anomaly engine considers multiple features and historical baselines.
+
+The implementation uses **scikit-learn Isolation Forest** with deterministic processing and historical data windows.
+
+When insufficient historical data exists, the system handles the condition explicitly instead of producing misleading anomaly results.
+
+---
+
+## 6. Alert Correlation
+
+Related security activity can be correlated using multiple signals and entity/time relationships.
+
+Correlation helps identify patterns that may not be visible when alerts are examined independently.
+
+Correlated activity can contribute to:
+
+- Incident creation
+- Incident updates
+- Alert linking
+- Investigation timelines
+- Supervisory findings
+
+---
+
+# 🔍 Supervisory Analytics
+
+The core differentiator of CyberScope is its ability to analyse SOC behaviour rather than simply display security events.
+
+## Execution Gap Detection
+
+Identifies situations where reported or expected capabilities do not sufficiently match the available operational evidence.
+
+### Example
+
+A SOC may report that a particular security process is operational, while the evidence contains little or no corresponding execution activity.
+
+CyberScope can surface this as a potential execution gap for examination.
+
+---
+
+## Negative-Space Detection
+
+Identifies **missing or unexpectedly low evidence** where activity would normally be expected.
+
+Rather than treating absence of data as proof that something did not happen, CyberScope evaluates the absence as a signal requiring further examination.
+
+---
+
+## Behavioural & Anomaly Analysis
+
+CyberScope identifies unusual operational patterns using:
+
+- Historical baselines
+- Statistical indicators
+- Anomaly detection
+- Entity behaviour
+- Time-based activity
+
+---
+
+## Peer Benchmarking
+
+CyberScope compares comparable entities and time periods to identify significant deviations.
+
+This reduces the limitations of using only absolute thresholds.
+
+For example:
+
+> An activity level may appear normal in isolation but significantly deviate from comparable entities.
+
+---
+
+## Evidence-Backed Supervisory Prioritization
+
+Multiple analytical signals are combined to prioritize:
+
+- Entities
+- Controls
+- Alerts
+- Cases
+- Samples
+- Review areas
+
+Each finding is intended to provide traceable reasoning and supporting evidence for human examination.
+
+---
+
+# 🤖 Local AI Intelligence
+
+CyberScope integrates **Ollama with a locally running LLM**.
+
+The AI layer can assist with:
+
+- Alert explanations
+- Incident intelligence
+- Investigation narratives
+- Evidence summaries
+- Finding explanations
+- Report-oriented narratives
+
+### AI is not the source of the core risk decision.
+
+The architecture separates:
+
+```text
+Deterministic Analytics
+        ↓
+Risk / Findings / Indicators
+        ↓
+Local AI
+        ↓
+Explanation / Summary / Narrative
